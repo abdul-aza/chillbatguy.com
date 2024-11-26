@@ -41,6 +41,266 @@
     <div id="game-container"></div>
     <script type="text/babel">
         // [Insert the entire ChillBatGame component code here]
+        import React, { useState, useEffect, useCallback } from 'react';
+import { Moon } from 'lucide-react';
+
+const ChillBatGame = () => {
+  const [gameStarted, setGameStarted] = useState(false);
+  const [gameOver, setGameOver] = useState(false);
+  const [score, setScore] = useState(0);
+  const [batPosition, setBatPosition] = useState(200);
+  const [velocity, setVelocity] = useState(0);
+  const [obstacles, setObstacles] = useState([]);
+  const [backgroundOffset, setBackgroundOffset] = useState(0);
+  const [speedMultiplier, setSpeedMultiplier] = useState(1);
+
+  const BASE_SPEED = 5;
+  const gravity = 0.8;
+  const jumpForce = -12;
+
+  const getCurrentSpeed = useCallback(() => {
+    return BASE_SPEED * speedMultiplier;
+  }, [speedMultiplier]);
+
+  const generateBuildings = (count, heightRange, opacity) => {
+    return Array.from({ length: count }, (_, i) => ({
+      height: Math.random() * heightRange[0] + heightRange[1],
+      width: 120 + Math.random() * 80,
+      position: i * 180,
+      opacity
+    }));
+  };
+
+  const [buildingsLayer1] = useState(generateBuildings(6, [100, 150], 0.3));
+  const [buildingsLayer2] = useState(generateBuildings(8, [150, 200], 0.4));
+  const [buildingsLayer3] = useState(generateBuildings(10, [200, 250], 0.5));
+
+  const jump = useCallback(() => {
+    if (!gameOver) {
+      setVelocity(jumpForce);
+    }
+  }, [gameOver]);
+
+  const resetGame = () => {
+    setBatPosition(200);
+    setVelocity(0);
+    setScore(0);
+    setObstacles([]);
+    setGameOver(false);
+    setGameStarted(true);
+    setSpeedMultiplier(1);
+  };
+
+  // Updated speed multiplier calculation
+  useEffect(() => {
+    const currentLevel = Math.floor(score / 200); // 200 points = 4 score display units
+    const newMultiplier = 1 + (currentLevel * 0.08);
+    setSpeedMultiplier(newMultiplier);
+  }, [score]);
+
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      if (e.code === 'Space') {
+        if (!gameStarted) {
+          resetGame();
+        } else {
+          jump();
+        }
+      }
+    };
+
+    window.addEventListener('keypress', handleKeyPress);
+    return () => window.removeEventListener('keypress', handleKeyPress);
+  }, [gameStarted, jump]);
+
+  useEffect(() => {
+    if (!gameStarted || gameOver) return;
+
+    const gameLoop = setInterval(() => {
+      setBatPosition(prev => {
+        const newPosition = prev + velocity;
+        if (newPosition > 600 || newPosition < 0) {
+          setGameOver(true);
+          return prev;
+        }
+        return newPosition;
+      });
+
+      setVelocity(prev => prev + gravity);
+      
+      const currentSpeed = getCurrentSpeed();
+      setBackgroundOffset(prev => (prev + currentSpeed) % 1000);
+
+      setObstacles(prev => {
+        let newObstacles = prev
+          .map(obs => ({ ...obs, x: obs.x - currentSpeed }))
+          .filter(obs => obs.x > -60);
+
+        if (prev.length === 0 || prev[prev.length - 1].x < 300) {
+          const gap = Math.random() * 200 + 150;
+          const height = Math.random() * 300 + 100;
+          newObstacles.push({ x: 800, height, gap });
+        }
+
+        return newObstacles;
+      });
+
+      obstacles.forEach(obstacle => {
+        if (
+          obstacle.x < 100 && obstacle.x > 0 &&
+          (batPosition < obstacle.height || batPosition > obstacle.height + obstacle.gap)
+        ) {
+          setGameOver(true);
+        }
+      });
+
+      setScore(prev => prev + 1);
+    }, 20);
+
+    return () => clearInterval(gameLoop);
+  }, [gameStarted, gameOver, velocity, obstacles, batPosition, jump, getCurrentSpeed]);
+
+  const renderBuildings = (buildings, speed) => {
+    return buildings.map((building, index) => (
+      <div
+        key={index}
+        className="absolute bottom-0 transition-transform"
+        style={{
+          height: `${building.height}px`,
+          width: `${building.width}px`,
+          left: `${(building.position - backgroundOffset * speed) % 1200}px`,
+          opacity: building.opacity,
+          transform: `translateX(${building.position}px)`,
+          transition: 'transform 0.1s linear'
+        }}
+      >
+        <div 
+          className="absolute inset-0 bg-gray-900"
+          style={{
+            boxShadow: 'inset 0 0 20px rgba(255, 255, 0, 0.1)'
+          }}
+        />
+        
+        {Array.from({ length: 15 }).map((_, i) => (
+          <div
+            key={i}
+            className="absolute w-2 h-2 bg-yellow-100"
+            style={{
+              left: `${(i % 4) * 15 + 10}px`,
+              top: `${Math.floor(i / 4) * 20 + 20}px`,
+              opacity: Math.random() * 0.5 + 0.2
+            }}
+          />
+        ))}
+      </div>
+    ));
+  };
+
+  return (
+    <div 
+      className="relative w-full h-screen overflow-hidden"
+      onClick={gameStarted ? jump : resetGame}
+    >
+      <div className="absolute inset-0 bg-gradient-to-b from-black via-blue-900 to-purple-900" />
+
+      <div className="absolute top-8 right-16">
+        <Moon size={64} color="#FFF" opacity={0.8} />
+      </div>
+
+      {Array.from({ length: 50 }).map((_, i) => (
+        <div
+          key={i}
+          className="absolute w-1 h-1 bg-white rounded-full animate-pulse"
+          style={{
+            top: `${Math.random() * 100}%`,
+            left: `${Math.random() * 100}%`,
+            opacity: Math.random() * 0.5 + 0.2,
+            animationDelay: `${Math.random() * 2}s`
+          }}
+        />
+      ))}
+
+      <div className="relative h-full">
+        <div style={{ transform: `translateX(-${backgroundOffset * 0.2}px)` }}>
+          {renderBuildings(buildingsLayer1, 0.2)}
+        </div>
+        <div style={{ transform: `translateX(-${backgroundOffset * 0.4}px)` }}>
+          {renderBuildings(buildingsLayer2, 0.4)}
+        </div>
+        <div style={{ transform: `translateX(-${backgroundOffset * 0.6}px)` }}>
+          {renderBuildings(buildingsLayer3, 0.6)}
+        </div>
+      </div>
+
+      {obstacles.map((obstacle, index) => (
+        <React.Fragment key={index}>
+          <div 
+            className="absolute w-16"
+            style={{
+              left: `${obstacle.x}px`,
+              height: `${obstacle.height}px`,
+              top: 0,
+            }}
+          >
+            <div className="absolute inset-0 bg-gradient-to-b from-purple-500 to-purple-700 rounded-lg border-2 border-purple-400" style={{ boxShadow: '0 0 20px rgba(147, 51, 234, 0.5)' }} />
+            <div className="absolute inset-0 flex items-center justify-center text-white font-bold">₿</div>
+          </div>
+          <div 
+            className="absolute w-16"
+            style={{
+              left: `${obstacle.x}px`,
+              top: `${obstacle.height + obstacle.gap}px`,
+              bottom: 0,
+            }}
+          >
+            <div className="absolute inset-0 bg-gradient-to-b from-purple-700 to-purple-500 rounded-lg border-2 border-purple-400" style={{ boxShadow: '0 0 20px rgba(147, 51, 234, 0.5)' }} />
+            <div className="absolute inset-0 flex items-center justify-center text-white font-bold">₿</div>
+          </div>
+        </React.Fragment>
+      ))}
+
+      <div 
+        className="absolute left-20 w-16 h-16 transform transition-transform"
+        style={{ 
+          top: `${batPosition}px`,
+          transform: `rotate(${velocity * 2}deg)`
+        }}
+      >
+        <div className="absolute inset-0 bg-gray-800 rounded-full shadow-lg">
+          <div className="absolute top-2 left-2 w-4 h-4 bg-yellow-400 rounded-full" />
+          <div className="absolute top-2 right-2 w-4 h-4 bg-yellow-400 rounded-full" />
+          <div className="absolute -left-8 top-0 w-8 h-12 bg-gray-800 rounded-l-full transform origin-right animate-pulse" />
+          <div className="absolute -right-8 top-0 w-8 h-12 bg-gray-800 rounded-r-full transform origin-left animate-pulse" />
+        </div>
+      </div>
+
+      <div className="absolute top-4 right-4 text-4xl text-white font-bold">
+        {Math.floor(score / 50)}
+      </div>
+
+      {(!gameStarted || gameOver) && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+          <h1 className="text-6xl text-white font-bold mb-4">
+            {gameOver ? 'Game Over!' : 'ChillBat Game'}
+          </h1>
+          <p className="text-2xl text-white mb-8">
+            {gameOver ? `Score: ${Math.floor(score / 50)}` : 'Click or Press Space to Start'}
+          </p>
+          {gameOver && (
+            <button 
+              onClick={resetGame}
+              className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+            >
+              Play Again
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ChillBatGame;
         // This is the same code as the previous React component
 
         ReactDOM.render(<ChillBatGame />, document.getElementById('game-container'));
