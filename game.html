@@ -157,26 +157,30 @@ const { useState, useEffect, useCallback } = React;
     const [isMobile] = useState(() => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
 
     const connectWallet = async () => {
+        if (isMobile) {
+            // Direct deep link to Phantom app
+            const currentURL = encodeURIComponent(window.location.href);
+            window.location.href = `phantom://browse/${currentURL}`;
+            
+            // Fallback for if Phantom isn't installed
+            setTimeout(() => {
+                window.location.href = 'https://phantom.app/download';
+            }, 1000);
+            return;
+        }
+
+        // Desktop logic remains the same
         setConnecting(true);
         setError(null);
 
         try {
-            if (isMobile) {
-                // Mobile deep link to Phantom
-                window.location.href = `https://phantom.app/ul/browse/${window.location.href}`;
-                return;
-            }
-
-            if (!window.solana || !window.solana.isPhantom) {
+            if (!window.solana?.isPhantom) {
                 throw new Error("Please install Phantom Wallet");
             }
-
             const response = await window.solana.connect();
-            const address = response.publicKey.toString();
-            onSuccess(address);
+            onSuccess(response.publicKey.toString());
         } catch (err) {
             setError(err.message);
-            console.error('Wallet connection error:', err);
         } finally {
             setConnecting(false);
         }
@@ -187,7 +191,7 @@ const { useState, useEffect, useCallback } = React;
             <div className="bg-gray-900 p-8 rounded-lg max-w-md w-full mx-4">
                 <h2 className="text-2xl text-white font-bold mb-6">Welcome to ChillBat Game</h2>
                 <p className="text-gray-300 mb-6">
-                    {isMobile ? 'Open in Phantom App to play' : 'Connect your Phantom wallet to play.'}<br/>
+                    {isMobile ? 'Open game in Phantom App to play' : 'Connect your Phantom wallet to play.'}<br/>
                     Entry Fee: {ENTRY_FEE} $ChillBat<br/>
                     Win {WINNING_PAYOUT} $ChillBat by reaching score 60!
                 </p>
@@ -201,19 +205,21 @@ const { useState, useEffect, useCallback } = React;
                 </button>
                 
                 {isMobile && (
-                    <p className="text-gray-300 mt-4 text-sm">
-                        Don't have Phantom? <a href="https://phantom.app/download" className="text-purple-400 underline">Download here</a>
+                    <p className="text-gray-300 mt-4 text-sm text-center">
+                        Don't have Phantom?<br/>
+                        <a href="https://phantom.app/download" className="text-purple-400 underline">
+                            Download from App Store/Play Store
+                        </a>
                     </p>
                 )}
                 
                 {error && (
-                    <p className="text-red-500 mt-4">{error}</p>
+                    <p className="text-red-500 mt-4 text-center">{error}</p>
                 )}
             </div>
         </div>
     );
 };
-
         const Leaderboard = ({ show }) => {
             const [scores, setScores] = useState([]);
 
