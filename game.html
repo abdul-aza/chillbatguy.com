@@ -151,36 +151,40 @@ const { useState, useEffect, useCallback } = React;
         };
 
         // Components
-        const WalletConnection = ({ onSuccess }) => {
+const WalletConnection = ({ onSuccess }) => {
     const [connecting, setConnecting] = useState(false);
     const [error, setError] = useState(null);
     const [isMobile] = useState(() => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
 
-    const connectWallet = async () => {
-        if (isMobile) {
-            // Direct deep link to Phantom app
-            const currentURL = encodeURIComponent(window.location.href);
-            window.location.href = `phantom://browse/${currentURL}`;
-            
-            // Fallback for if Phantom isn't installed
-            setTimeout(() => {
-                window.location.href = 'https://phantom.app/download';
-            }, 1000);
-            return;
-        }
+    const openPhantomApp = () => {
+        const currentURL = encodeURIComponent(window.location.href);
+        window.location.href = `phantom://browse/${currentURL}`;
+        
+        // Fallback for if Phantom isn't installed
+        setTimeout(() => {
+            window.location.href = 'https://phantom.app/download';
+        }, 1000);
+    };
 
-        // Desktop logic remains the same
+    const connectWallet = async () => {
         setConnecting(true);
         setError(null);
 
         try {
-            if (!window.solana?.isPhantom) {
-                throw new Error("Please install Phantom Wallet");
+            if (isMobile) {
+                const dappKeyPair = window.solana.connect();
+                const publicKey = await window.solana.request({ method: "connect" });
+                onSuccess(publicKey.toString());
+            } else {
+                if (!window.solana?.isPhantom) {
+                    throw new Error("Please install Phantom Wallet");
+                }
+                const response = await window.solana.connect();
+                onSuccess(response.publicKey.toString());
             }
-            const response = await window.solana.connect();
-            onSuccess(response.publicKey.toString());
         } catch (err) {
             setError(err.message);
+            console.error('Wallet connection error:', err);
         } finally {
             setConnecting(false);
         }
@@ -191,18 +195,27 @@ const { useState, useEffect, useCallback } = React;
             <div className="bg-gray-900 p-8 rounded-lg max-w-md w-full mx-4">
                 <h2 className="text-2xl text-white font-bold mb-6">Welcome to ChillBat Game</h2>
                 <p className="text-gray-300 mb-6">
-                    {isMobile ? 'Open game in Phantom App to play' : 'Connect your Phantom wallet to play.'}<br/>
+                    Play with $ChillBat tokens<br/>
                     Entry Fee: {ENTRY_FEE} $ChillBat<br/>
                     Win {WINNING_PAYOUT} $ChillBat by reaching score 60!
                 </p>
                 
-                <button
-                    onClick={connectWallet}
-                    disabled={connecting}
-                    className="w-full bg-purple-600 text-white py-3 px-6 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
-                >
-                    {isMobile ? 'Open in Phantom App' : 'Connect Phantom Wallet'}
-                </button>
+                <div className="space-y-4">
+                    <button
+                        onClick={openPhantomApp}
+                        className="w-full bg-purple-600 text-white py-3 px-6 rounded-lg hover:bg-purple-700 transition-colors"
+                    >
+                        {isMobile ? 'Open Phantom App / Buy $ChillBat' : 'Buy $ChillBat'}
+                    </button>
+
+                    <button
+                        onClick={connectWallet}
+                        disabled={connecting}
+                        className="w-full bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                    >
+                        {connecting ? 'Connecting...' : 'Enter Game (5 tries)'}
+                    </button>
+                </div>
                 
                 {isMobile && (
                     <p className="text-gray-300 mt-4 text-sm text-center">
