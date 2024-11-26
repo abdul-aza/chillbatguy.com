@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chill Bat Guy Game</title>
+    <!-- Core dependencies -->
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <script src="https://unpkg.com/@solana/spl-token@latest/lib/index.iife.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        #root {
+            width: 100vw;
+            height: 100vh;
+        }
+        .back-button {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            padding: 10px 20px;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+        }
+        .back-button:hover {
+            background: rgba(0, 0, 0, 0.7);
+        }
+        .moon {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            background: linear-gradient(90deg, #ffffff, #f4f4f4);
+            box-shadow: inset -22px 0 30px rgba(0, 0, 0, 0.2),
+                        0 0 30px rgba(255, 255, 255, 0.3);
+            position: relative;
+        }
+        .moon::after {
+            content: '';
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            width: 18px;
+            height: 18px;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            box-shadow: 
+                30px 22px 0 -4px rgba(0, 0, 0, 0.1),
+                15px 45px 0 -6px rgba(0, 0, 0, 0.1);
+        }
+        .leaderboard {
+            position: fixed;
+            left: 20px;
+            top: 80px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            color: white;
+            z-index: 100;
+            min-width: 200px;
+        }
+        .stats {
+            position: fixed;
+            right: 20px;
+            top: 80px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            color: white;
+            z-index: 100;
+            min-width: 200px;
+        }
+        .wallet-button {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            padding: 10px 20px;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: Arial, sans-serif;
+        }
+        .wallet-button:hover {
+            background: rgba(0, 0, 0, 0.7);
+        }
+    </style>
+</head>
+<body>
+    <a href="index.html" class="back-button">← Back to Home</a>
+    <div id="root"></div>
+
+    <script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+
+        // Constants for token handling
+        const TOKEN_ADDRESS = "HwS3GFzAE8BFpL5jTu6Sm5DyMofaGRjpNrzq9yMS6yXE";
+        const TREASURY_WALLET = "7gitjQR4y3JdchHaGLm8XLFqYkA8LACm1dXUCk6ArpuQ";
+        const ENTRY_FEE = 1000;
+        const WINNING_PAYOUT = 3000;
+
+        // Leaderboard Manager
+        const LeaderboardManager = {
+            getScores() {
+                const scores = localStorage.getItem('chillbat_scores');
+                return scores ? JSON.parse(scores) : [];
+            },
+
+            addScore(wallet, score) {
+                let scores = this.getScores();
+                scores.push({
+                    wallet: wallet.slice(0, 6) + '...' + wallet.slice(-4),
+                    score: Math.floor(score / 50), // Convert raw score to display score
+                    date: new Date().toISOString(),
+                    verified: true
+                });
+                
+                scores.sort((a, b) => b.score - a.score);
+                scores = scores.slice(0, 10);
+                
+                localStorage.setItem('chillbat_scores', JSON.stringify(scores));
+            },
+
+            getPlayerStats(wallet) {
+                const stats = localStorage.getItem(`chillbat_stats_${wallet}`) || '{}';
+                return JSON.parse(stats);
+            },
+
+            updatePlayerStats(wallet, gameResult) {
+                const stats = this.getPlayerStats(wallet);
+                stats.gamesPlayed = (stats.gamesPlayed || 0) + 1;
+                stats.highScore = Math.max(Math.floor(gameResult.score / 50), stats.highScore || 0);
+                stats.totalEarned = (stats.totalEarned || 0) + (gameResult.won ? WINNING_PAYOUT : 0);
+                stats.totalSpent = (stats.totalSpent || 0) + ENTRY_FEE;
+                
+                localStorage.setItem(`chillbat_stats_${wallet}`, JSON.stringify(stats));
+                return stats;
+            }
+        };
+
+        // Components
+        const WalletConnection = ({ onSuccess }) => {
+            const [connecting, setConnecting] = useState(false);
+            const [error, setError] = useState(null);
+
+            const connectWallet = async () => {
+                setConnecting(true);
+                setError(null);
+
+                try {
+                    if (!window.solana || !window.solana.isPhantom) {
+                        throw new Error("Please install Phantom Wallet");
+                    }
+
+                    const response = await window.solana.connect();
+                    const address = response.publicKey.toString();
+                    onSuccess(address);
+                } catch (err) {
+                    setError(err.message);
+                    console.error('Wallet connection error:', err);
+                } finally {
+                    setConnecting(false);
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75">
+                    <div className="bg-gray-900 p-8 rounded-lg max-w-md w-full mx-4">
+                        <h2 className="text-2xl text-white font-bold mb-6">Welcome to ChillBat Game</h2>
+                        <p className="text-gray-300 mb-6">
+                            Connect your Phantom wallet to play.<br/>
+                            Entry Fee: {ENTRY_FEE} $ChillBat<br/>
+                            Win {WINNING_PAYOUT} $ChillBat by reaching score 60!
+                        </p>
+                        
+                        <button
+                            onClick={connectWallet}
+                            disabled={connecting}
+                            className="w-full bg-purple-600 text-white py-3 px-6 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+                        >
+                            {connecting ? 'Connecting...' : 'Connect Phantom Wallet'}
+                        </button>
+                        
+                        {error && (
+                            <p className="text-red-500 mt-4">{error}</p>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const Leaderboard = ({ show }) => {
+            const [scores, setScores] = useState([]);
+
+            useEffect(() => {
+                setScores(LeaderboardManager.getScores());
+            }, [show]);
+
+            if (!show) return null;
+
+            return (
+                <div className="leaderboard">
+                    <h3 className="text-xl font-bold mb-3">Top Scores</h3>
+                    <div className="space-y-2">
+                        {scores.map((score, index) => (
+                            <div key={index} className="flex justify-between">
+                                <span>{score.wallet}</span>
+                                <span className="ml-4">{score.score}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        const PlayerStats = ({ wallet, show }) => {
+            const [stats, setStats] = useState({});
+
+            useEffect(() => {
+                if (wallet) {
+                    setStats(LeaderboardManager.getPlayerStats(wallet));
+                }
+            }, [wallet, show]);
+
+            if (!show || !wallet) return null;
+
+            return (
+                <div className="stats">
+                    <h3 className="text-xl font-bold mb-3">Your Stats</h3>
+                    <div className="space-y-2">
+                        <div>Games Played: {stats.gamesPlayed || 0}</div>
+                        <div>High Score: {stats.highScore || 0}</div>
+                        <div>Total Earned: {stats.totalEarned || 0} $ChillBat</div>
+                        <div>Total Spent: {stats.totalSpent || 0} $ChillBat</div>
+                    </div>
+                </div>
+            );
+        };
+// Main Game Component
+        const ChillBatGame = () => {
+            const [gameStarted, setGameStarted] = useState(false);
+            const [gameOver, setGameOver] = useState(false);
+            const [score, setScore] = useState(0);
+            const [batPosition, setBatPosition] = useState(300);
+            const [velocity, setVelocity] = useState(0);
+            const [obstacles, setObstacles] = useState([]);
+            const [backgroundOffset, setBackgroundOffset] = useState(0);
+            const [speedMultiplier, setSpeedMultiplier] = useState(1);
+            const [walletConnected, setWalletConnected] = useState(false);
+            const [walletAddress, setWalletAddress] = useState(null);
+
+            const BASE_SPEED = 7.5;
+            const gravity = 1.2;
+            const jumpForce = -18;
+
+            const getCurrentSpeed = useCallback(() => {
+                return BASE_SPEED * speedMultiplier;
+            }, [speedMultiplier]);
+
+            const generateBuildings = (count, heightRange, opacity) => {
+                return Array.from({ length: count * 1.5 }, (_, i) => ({
+                    height: Math.random() * heightRange[0] * 1.5 + heightRange[1] * 1.5,
+                    width: (120 + Math.random() * 80) * 1.5,
+                    position: i * 270,
+                    opacity
+                }));
+            };
+
+            const [buildingsLayer1] = useState(generateBuildings(6, [100, 150], 0.3));
+            const [buildingsLayer2] = useState(generateBuildings(8, [150, 200], 0.4));
+            const [buildingsLayer3] = useState(generateBuildings(10, [200, 250], 0.5));
+
+            const handleWalletConnection = (address) => {
+                setWalletConnected(true);
+                setWalletAddress(address);
+            };
+
+            const jump = useCallback(() => {
+                if (!gameOver) {
+                    setVelocity(jumpForce);
+                }
+            }, [gameOver]);
+
+            const resetGame = () => {
+                setBatPosition(300);
+                setVelocity(0);
+                setScore(0);
+                setObstacles([]);
+                setGameOver(false);
+                setGameStarted(true);
+                setSpeedMultiplier(1);
+            };
+
+            useEffect(() => {
+                const currentLevel = Math.floor(score / 200);
+                const newMultiplier = 1 + (currentLevel * 0.08);
+                setSpeedMultiplier(newMultiplier);
+            }, [score]);
+
+            useEffect(() => {
+                if (gameOver && walletAddress) {
+                    const gameResult = {
+                        score: score,
+                        won: Math.floor(score / 50) >= 60
+                    };
+                    LeaderboardManager.addScore(walletAddress, score);
+                    LeaderboardManager.updatePlayerStats(walletAddress, gameResult);
+                }
+            }, [gameOver, score, walletAddress]);
+
+            useEffect(() => {
+                const handleKeyPress = (e) => {
+                    if (e.code === 'Space') {
+                        if (!gameStarted) {
+                            resetGame();
+                        } else {
+                            jump();
+                        }
+                    }
+                };
+
+                window.addEventListener('keypress', handleKeyPress);
+                return () => window.removeEventListener('keypress', handleKeyPress);
+            }, [gameStarted, jump]);
+
+            useEffect(() => {
+                if (!gameStarted || gameOver) return;
+
+                const gameLoop = setInterval(() => {
+                    setBatPosition(prev => {
+                        const newPosition = prev + velocity;
+                        if (newPosition > 900 || newPosition < 0) {
+                            setGameOver(true);
+                            return prev;
+                        }
+                        return newPosition;
+                    });
+
+                    setVelocity(prev => prev + gravity);
+                    
+                    const currentSpeed = getCurrentSpeed();
+                    setBackgroundOffset(prev => (prev + currentSpeed) % 1500);
+
+                    setObstacles(prev => {
+                        let newObstacles = prev
+                            .map(obs => ({ ...obs, x: obs.x - currentSpeed }))
+                            .filter(obs => obs.x > -90);
+
+                        if (prev.length === 0 || prev[prev.length - 1].x < 600) {
+                            const gap = Math.random() * 300 + 225;
+                            const height = Math.random() * 450 + 150;
+                            newObstacles.push({ x: 1200, height, gap });
+                        }
+
+                        return newObstacles;
+                    });
+
+                    obstacles.forEach(obstacle => {
+                        const hitboxPadding = 10;
+                        if (
+                            obstacle.x < 150 && obstacle.x > 0 &&
+                            (batPosition < obstacle.height - hitboxPadding || 
+                             batPosition > obstacle.height + obstacle.gap + hitboxPadding)
+                        ) {
+                            setGameOver(true);
+                        }
+                    });
+
+                    setScore(prev => prev + 1);
+                }, 20);
+
+                return () => clearInterval(gameLoop);
+            }, [gameStarted, gameOver, velocity, obstacles, batPosition, jump, getCurrentSpeed]);
+
+            const renderBuildings = (buildings, speed) => {
+                return buildings.map((building, index) => (
+                    <div
+                        key={index}
+                        className="absolute bottom-0 transition-transform"
+                        style={{
+                            height: `${building.height}px`,
+                            width: `${building.width}px`,
+                            left: `${(building.position - backgroundOffset * speed) % 1800}px`,
+                            opacity: building.opacity,
+                            transform: `translateX(${building.position}px)`,
+                            transition: 'transform 0.1s linear'
+                        }}
+                    >
+                        <div 
+                            className="absolute inset-0 bg-gray-900"
+                            style={{
+                                boxShadow: 'inset 0 0 30px rgba(255, 255, 0, 0.1)'
+                            }}
+                        />
+                        
+                        {Array.from({ length: 20 }).map((_, i) => (
+                            <div
+                                key={i}
+                                className="absolute w-3 h-3 bg-yellow-100"
+                                style={{
+                                    left: `${(i % 4) * 22 + 15}px`,
+                                    top: `${Math.floor(i / 4) * 30 + 30}px`,
+                                    opacity: Math.random() * 0.5 + 0.2
+                                }}
+                            />
+                        ))}
+                    </div>
+                ));
+            };
+
+            if (!walletConnected) {
+                return <WalletConnection onSuccess={handleWalletConnection} />;
+            }
+
+            return (
+                <div 
+                    className="relative w-full h-screen overflow-hidden"
+                    onClick={gameStarted ? jump : resetGame}
+                >
+                    <div className="absolute inset-0 bg-gradient-to-b from-black via-blue-900 to-purple-900" />
+
+                    <div className="absolute top-12 right-24">
+                        <div className="moon"></div>
+                    </div>
+
+                    <Leaderboard show={gameStarted} />
+                    <PlayerStats wallet={walletAddress} show={gameStarted} />
+
+                    {Array.from({ length: 75 }).map((_, i) => (
+                        <div
+                            key={i}
+                            className="absolute w-1.5 h-1.5 bg-white rounded-full animate-pulse"
+                            style={{
+                                top: `${Math.random() * 100}%`,
+                                left: `${Math.random() * 100}%`,
+                                opacity: Math.random() * 0.5 + 0.2,
+                                animationDelay: `${Math.random() * 2}s`
+                            }}
+                        />
+                    ))}
+
+                    <div className="relative h-full">
+                        <div style={{ transform: `translateX(-${backgroundOffset * 0.2}px)` }}>
+                            {renderBuildings(buildingsLayer1, 0.2)}
+                        </div>
+                        <div style={{ transform: `translateX(-${backgroundOffset * 0.4}px)` }}>
+                            {renderBuildings(buildingsLayer2, 0.4)}
+                        </div>
+                        <div style={{ transform: `translateX(-${backgroundOffset * 0.6}px)` }}>
+                            {renderBuildings(buildingsLayer3, 0.6)}
+                        </div>
+                    </div>
+
+                    {obstacles.map((obstacle, index) => (
+                        <React.Fragment key={index}>
+                            <div 
+                                className="absolute w-24"
+                                style={{
+                                    left: `${obstacle.x}px`,
+                                    height: `${obstacle.height}px`,
+                                    top: 0,
+                                }}
+                            >
+                                <div className="absolute inset-0 bg-gradient-to-b from-purple-500 to-purple-700 rounded-lg border-2 border-purple-400" 
+                                     style={{ boxShadow: '0 0 30px rgba(147, 51, 234, 0.5)' }} />
+                                <div className="absolute inset-0 flex items-center justify-center text-white font-bold text-2xl">₿</div>
+                            </div>
+                            <div 
+                                className="absolute w-24"
+                                style={{
+                                    left: `${obstacle.x}px`,
+                                    top: `${obstacle.height + obstacle.gap}px`,
+                                    bottom: 0,
+                                }}
+                            >
+                                <div className="absolute inset-0 bg-gradient-to-b from-purple-700 to-purple-500 rounded-lg border-2 border-purple-400" 
+                                     style={{ boxShadow: '0 0 30px rgba(147, 51, 234, 0.5)' }} />
+                                <div className="absolute inset-0 flex items-center justify-center text-white font-bold text-2xl">₿</div>
+                            </div>
+                        </React.Fragment>
+                    ))}
+
+                    <div 
+                        className="absolute left-[40vw] w-24 h-24 transform transition-transform"
+                        style={{ 
+                            top: `${batPosition}px`,
+                            transform: `rotate(${velocity * 2}deg)`
+                        }}
+                    >
+                        <img 
+                            src="IMG_4964_2.png" 
+                            alt="Chill Bat"
+                            className="w-full h-full object-contain"
+                        />
+                    </div>
+
+                    <div className="absolute top-6 right-6 text-6xl text-white font-bold">
+                        {Math.floor(score / 50)}
+                    </div>
+
+                    {(!gameStarted || gameOver) && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+                            <h1 className="text-7xl text-white font-bold mb-6">
+                                {gameOver ? 'Game Over!' : 'ChillBat Game'}
+                            </h1>
+                            <p className="text-3xl text-white mb-12">
+                                {gameOver ? `Score: ${Math.floor(score / 50)}` : 'Click or Press Space to Start'}
+                            </p>
+                            {gameOver && (
+                                <button 
+                                    onClick={resetGame}
+                                    className="px-8 py-4 bg-purple-600 text-white text-xl rounded-lg hover:bg-purple-700 transition-colors"
+                                >
+                                    Play Again
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container);
+        root.render(<ChillBatGame />);
+    </script>
+</body>
+</html>
