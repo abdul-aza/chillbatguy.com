@@ -4,9 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chill Bat Guy Game</title>
-    <!-- Load React -->
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
     <style>
         body {
@@ -33,7 +32,6 @@
             color: white;
             text-decoration: none;
             border-radius: 5px;
-            z-index: 1000;
         }
         .back-button:hover {
             background: rgba(0, 0, 0, 0.7);
@@ -42,34 +40,20 @@
 </head>
 <body>
     <a href="index.html" class="back-button">← Back to Home</a>
-    <div id="game-container"></div>
-    
+    <div id="root"></div>
+
     <script type="text/babel">
-        function TestGame() {
-            const [clicked, setClicked] = React.useState(false);
-            
+        const Test = () => {
             return (
                 <div className="game-container">
-                    <button 
-                        onClick={() => setClicked(true)}
-                        style={{
-                            padding: '20px',
-                            fontSize: '20px',
-                            backgroundColor: '#4a5568',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '8px',
-                            cursor: 'pointer'
-                        }}
-                    >
-                        {clicked ? 'React is working!' : 'Click me to test React'}
-                    </button>
+                    <h1>React Test</h1>
                 </div>
             );
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('game-container'));
-        root.render(<TestGame />);
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container);
+        root.render(<Test />);
     </script>
 </body>
 </html>
