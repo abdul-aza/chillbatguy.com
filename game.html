@@ -11,6 +11,9 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.js"></script>
+    <script src="https://unpkg.com/@solana/spl-token@latest/lib/index.iife.js"></script>
+
     <style>
         body {
             margin: 0;
@@ -151,88 +154,85 @@ const { useState, useEffect, useCallback } = React;
         };
 
         // Components
-const WalletConnection = ({ onSuccess }) => {
-    const [connecting, setConnecting] = useState(false);
-    const [error, setError] = useState(null);
-    const [isMobile] = useState(() => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
+ const WalletConnection = ({ onSuccess }) => {
+            const [connecting, setConnecting] = useState(false);
+            const [error, setError] = useState(null);
+            const [isMobile] = useState(() => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
 
-    const openPhantomApp = () => {
-        const currentURL = encodeURIComponent(window.location.href);
-        window.location.href = `phantom://browse/${currentURL}`;
-        
-        // Fallback for if Phantom isn't installed
-        setTimeout(() => {
-            window.location.href = 'https://phantom.app/download';
-        }, 1000);
-    };
+            const openPhantomApp = () => {
+                const tokenUrl = `https://phantom.app/ul/browse/tokens/${TOKEN_ADDRESS}?network=mainnet`;
+                window.location.href = isMobile ? `phantom://browse/${encodeURIComponent(tokenUrl)}` : tokenUrl;
+            };
 
-    const connectWallet = async () => {
-        setConnecting(true);
-        setError(null);
+            const connectWallet = async () => {
+                setConnecting(true);
+                setError(null);
 
-        try {
-            if (isMobile) {
-                const dappKeyPair = window.solana.connect();
-                const publicKey = await window.solana.request({ method: "connect" });
-                onSuccess(publicKey.toString());
-            } else {
-                if (!window.solana?.isPhantom) {
-                    throw new Error("Please install Phantom Wallet");
+                try {
+                    // Check if running in Phantom in-app browser
+                    const isPhantomBrowser = window.phantom?.solana?.isPhantom;
+                    
+                    if (isPhantomBrowser) {
+                        const response = await window.phantom.solana.connect();
+                        onSuccess(response.publicKey.toString());
+                    } else if (window.solana?.isPhantom) {
+                        const response = await window.solana.connect();
+                        onSuccess(response.publicKey.toString());
+                    } else {
+                        throw new Error("Please open in Phantom App");
+                    }
+                } catch (err) {
+                    console.error('Connection error:', err);
+                    setError(err.message);
+                } finally {
+                    setConnecting(false);
                 }
-                const response = await window.solana.connect();
-                onSuccess(response.publicKey.toString());
-            }
-        } catch (err) {
-            setError(err.message);
-            console.error('Wallet connection error:', err);
-        } finally {
-            setConnecting(false);
-        }
-    };
+            };
 
-    return (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75">
-            <div className="bg-gray-900 p-8 rounded-lg max-w-md w-full mx-4">
-                <h2 className="text-2xl text-white font-bold mb-6">Welcome to ChillBat Game</h2>
-                <p className="text-gray-300 mb-6">
-                    Play with $ChillBat tokens<br/>
-                    Entry Fee: {ENTRY_FEE} $ChillBat<br/>
-                    Win {WINNING_PAYOUT} $ChillBat by reaching score 60!
-                </p>
-                
-                <div className="space-y-4">
-                    <button
-                        onClick={openPhantomApp}
-                        className="w-full bg-purple-600 text-white py-3 px-6 rounded-lg hover:bg-purple-700 transition-colors"
-                    >
-                        {isMobile ? 'Open Phantom App / Buy $ChillBat' : 'Buy $ChillBat'}
-                    </button>
+            return (
+                <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75">
+                    <div className="bg-gray-900 p-8 rounded-lg max-w-md w-full mx-4">
+                        <h2 className="text-2xl text-white font-bold mb-6">Welcome to ChillBat Game</h2>
+                        <p className="text-gray-300 mb-6">
+                            Play with $ChillBat tokens<br/>
+                            Entry Fee: {ENTRY_FEE} $ChillBat<br/>
+                            Win {WINNING_PAYOUT} $ChillBat by reaching score 60!
+                        </p>
+                        
+                        <div className="space-y-4">
+                            <button
+                                onClick={openPhantomApp}
+                                className="w-full bg-purple-600 text-white py-3 px-6 rounded-lg hover:bg-purple-700 transition-colors"
+                            >
+                                Buy $ChillBat
+                            </button>
 
-                    <button
-                        onClick={connectWallet}
-                        disabled={connecting}
-                        className="w-full bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                    >
-                        {connecting ? 'Connecting...' : 'Enter Game (5 tries)'}
-                    </button>
+                            <button
+                                onClick={connectWallet}
+                                disabled={connecting}
+                                className="w-full bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                            >
+                                {connecting ? 'Connecting...' : 'Enter Game (5 tries)'}
+                            </button>
+                        </div>
+                        
+                        {isMobile && !window.phantom?.solana?.isPhantom && (
+                            <p className="text-gray-300 mt-4 text-sm text-center">
+                                For best experience, open in Phantom App<br/>
+                                <a href="https://phantom.app/download" className="text-purple-400 underline">
+                                    Download Phantom
+                                </a>
+                            </p>
+                        )}
+                        
+                        {error && (
+                            <p className="text-red-500 mt-4 text-center">{error}</p>
+                        )}
+                    </div>
                 </div>
-                
-                {isMobile && (
-                    <p className="text-gray-300 mt-4 text-sm text-center">
-                        Don't have Phantom?<br/>
-                        <a href="https://phantom.app/download" className="text-purple-400 underline">
-                            Download from App Store/Play Store
-                        </a>
-                    </p>
-                )}
-                
-                {error && (
-                    <p className="text-red-500 mt-4 text-center">{error}</p>
-                )}
-            </div>
-        </div>
-    );
-};
+            );
+        };
+
         const Leaderboard = ({ show }) => {
             const [scores, setScores] = useState([]);
 
