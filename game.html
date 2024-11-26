@@ -8,15 +8,16 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide-react@latest"></script>
-    <!-- Tailwind -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Use a specific version of Lucide -->
+    <script src="https://unpkg.com/lucide@0.263.1/dist/umd/lucide.min.js"></script>
+    <!-- Use Tailwind directly -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
         body {
             margin: 0;
             padding: 0;
             overflow: hidden;
+            background: #000;
         }
         #root {
             width: 100vw;
@@ -45,35 +46,19 @@
 
     <script type="text/babel">
         const { useState, useEffect, useCallback } = React;
-        const { Moon } = lucide.icons;
 
-        const ChillBatGame = () => {
-            const [gameStarted, setGameStarted] = useState(false);
-            const [gameOver, setGameOver] = useState(false);
-            const [score, setScore] = useState(0);
-            const [batPosition, setBatPosition] = useState(200);
-            const [velocity, setVelocity] = useState(0);
-            const [obstacles, setObstacles] = useState([]);
-            const [backgroundOffset, setBackgroundOffset] = useState(0);
-            const [speedMultiplier, setSpeedMultiplier] = useState(1);
-
-            const BASE_SPEED = 5;
-            const gravity = 0.8;
-            const jumpForce = -12;
-
-            // Rest of your game code here...
-            // [I'll provide the rest in the next message to keep this readable]
-
+        // Simple test component first
+        const TestGame = () => {
             return (
-                <div className="relative w-full h-screen overflow-hidden">
-                    <h1>Game Loading...</h1>
+                <div className="w-full h-screen flex items-center justify-center bg-black">
+                    <h1 className="text-white text-4xl">React and Tailwind Working!</h1>
                 </div>
             );
         };
 
         const container = document.getElementById('root');
         const root = ReactDOM.createRoot(container);
-        root.render(<ChillBatGame />);
+        root.render(<TestGame />);
     </script>
 </body>
 </html>
