@@ -130,10 +130,10 @@
                 console.error('Error checking balance:', error);
                 throw new Error('Failed to check token balance');
     }
-}
+},
 
             
-           , async  processEntryFee(walletAddress) {
+            async processEntryFee(walletAddress) {
                     try {
                         const connection = new solanaWeb3.Connection('https://api.devnet.solana.com');
                         const fromTokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
@@ -166,9 +166,9 @@
         console.error('Error processing entry fee:', error);
         throw new Error('Failed to process entry fee');
     }
-}
+},
 
-,            async sendReward(walletAddress) {
+            async sendReward(walletAddress) {
                 try {
                     const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
                     const transaction = new solanaWeb3.Transaction().add(
