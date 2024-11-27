@@ -114,21 +114,9 @@ const TokenManager = {
         try {
             // Detect Phantom Wallet
             if (!window.solana || !window.solana.isPhantom) {
-                if (/iPhone|iPad|Android/i.test(navigator.userAgent)) {
-                    // Redirect to Phantom deep link for mobile users
-                    window.open("https://phantom.app/ulink/connect", "_blank");
-                } else {
-                    throw new Error("Phantom Wallet is not detected. Please install it.");
-                }
-                return;
+                throw new Error("Phantom Wallet is not detected. Please install it.");
             }
-
-            if (!window.solana || !window.solana.isPhantom) {
-    console.error("Phantom Wallet is not detected.");
-    throw new Error("Phantom Wallet is not detected. Please install it.");
-}
-console.log("Phantom Wallet detected.");
-
+            console.log("Phantom Wallet detected.");
 
             // Connect to Phantom
             const provider = window.solana;
@@ -150,8 +138,8 @@ console.log("Phantom Wallet detected.");
             // Check if the token account exists
             const accountInfo = await connection.getAccountInfo(tokenAccount.address);
             if (!accountInfo) {
-                console.log("Token account does not exist.");
-                return 0; // No balance if account doesn't exist
+                console.warn("Token account does not exist.");
+                return 0; // No balance
             }
 
             // Fetch and return token balance
@@ -159,10 +147,11 @@ console.log("Phantom Wallet detected.");
             console.log("Token balance fetched:", balance.value.amount);
             return parseInt(balance.value.amount, 10);
         } catch (error) {
-            console.error("Error in checkTokenBalance:", error.message);
+            console.error("Error in checkTokenBalance:", error);
             throw new Error("Failed to check token balance");
         }
     },
+
 
             
             async processEntryFee(walletAddress) {
