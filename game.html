@@ -112,20 +112,35 @@
 const TokenManager = {
     async checkTokenBalance(walletAddress) {
         try {
+            // Detect Phantom Wallet
             if (!window.solana || !window.solana.isPhantom) {
-                throw new Error("Phantom Wallet is not detected. Please install it.");
+                if (/iPhone|iPad|Android/i.test(navigator.userAgent)) {
+                    // Redirect to Phantom deep link for mobile users
+                    window.open("https://phantom.app/ulink/connect", "_blank");
+                } else {
+                    throw new Error("Phantom Wallet is not detected. Please install it.");
+                }
+                return;
             }
 
             console.log("Phantom detected:", window.solana?.isPhantom);
 
-            const connection = new solanaWeb3.Connection('https://api.devnet.solana.com');
+            // Connect to Phantom
+            const provider = window.solana;
+            const response = await provider.connect(); // Triggers wallet connection
+            const publicKey = response.publicKey.toString();
+            console.log("Connected wallet public key:", publicKey);
+
+            // Establish Solana connection
+            const connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl("devnet"));
+
+            // Get or create the token account
             const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
                 connection,
                 new solanaWeb3.PublicKey(walletAddress),
                 new solanaWeb3.PublicKey(TOKEN_ADDRESS)
             );
-
-            console.log("Token account address:", tokenAccount.toBase58());
+            console.log("Token account address:", tokenAccount.address.toBase58());
 
             // Check if the token account exists
             const accountInfo = await connection.getAccountInfo(tokenAccount.address);
@@ -134,15 +149,16 @@ const TokenManager = {
                 return 0; // No balance if account doesn't exist
             }
 
-            // Fetch token balance
+            // Fetch and return token balance
             const balance = await connection.getTokenAccountBalance(tokenAccount.address);
             console.log("Token balance fetched:", balance.value.amount);
-            return parseInt(balance.value.amount, 10); // Return as integer
+            return parseInt(balance.value.amount, 10);
         } catch (error) {
-            console.error("Error in checkTokenBalance:", error);
+            console.error("Error in checkTokenBalance:", error.message);
             throw new Error("Failed to check token balance");
         }
     },
+
             
             async processEntryFee(walletAddress) {
                     try {
