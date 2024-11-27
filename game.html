@@ -112,52 +112,77 @@
         const WINNING_PAYOUT = 3000;
 
         // Token Transaction Manager
-const TokenManager = {
-    async checkTokenBalance(walletAddress) {
-        try {
-            // Detect Phantom Wallet
-            if (!window.solana || !window.solana.isPhantom) {
-                throw new Error("Phantom Wallet is not detected. Please install it.");
+    const TokenManager = {
+        async checkTokenBalance(walletAddress) {
+            try {
+                if (!window.solana || !window.solana.isPhantom) {
+                    throw new Error("Phantom Wallet is not detected. Please install it.");
+                }
+
+                console.log("Phantom Wallet detected.");
+
+                const connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl("devnet"));
+                const publicKey = new solanaWeb3.PublicKey(walletAddress);
+
+                const tokenAccountAddress = await getOrCreateAssociatedTokenAccount(connection, publicKey, new solanaWeb3.PublicKey(TOKEN_ADDRESS));
+                console.log("Token account address:", tokenAccountAddress.toBase58());
+
+                const balance = await getTokenAccountBalance(connection, tokenAccountAddress);
+                console.log("Token balance:", balance);
+
+                return balance;
+            } catch (error) {
+                console.error("Error in checkTokenBalance:", error.message);
+                throw new Error("Failed to check token balance");
             }
-            console.log("Phantom Wallet detected.");
-            console.log("splToken defined:", typeof splToken !== "undefined");
-            console.log("splToken debug:", splToken); // Will throw an error if not defined
-
-
-            // Connect to Phantom
-            const provider = window.solana;
-            const response = await provider.connect(); // Triggers wallet connection
-            const publicKey = response.publicKey.toString();
-            console.log("Connected wallet public key:", publicKey);
-
-            // Establish Solana connection
-            const connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl("devnet"));
-
-            // Get or create the token account
-            const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
-                connection,
-                new solanaWeb3.PublicKey(walletAddress),
-                new solanaWeb3.PublicKey(TOKEN_ADDRESS)
-            );
-            console.log("Token account address:", tokenAccount.address.toBase58());
-
-            // Check if the token account exists
-            const accountInfo = await connection.getAccountInfo(tokenAccount.address);
-            if (!accountInfo) {
-                console.warn("Token account does not exist.");
-                return 0; // No balance
-            }
-
-            // Fetch and return token balance
-            const balance = await connection.getTokenAccountBalance(tokenAccount.address);
-            console.log("Token balance fetched:", balance.value.amount);
-            return parseInt(balance.value.amount, 10);
-        } catch (error) {
-            console.error("Error in checkTokenBalance:", error);
-            throw new Error("Failed to check token balance");
         }
-    },
+    };
 
+    async function getOrCreateAssociatedTokenAccount(connection, wallet, mintAddress) {
+        const [associatedTokenAddress] = await solanaWeb3.PublicKey.findProgramAddress(
+            [
+                wallet.toBuffer(),
+                solanaWeb3.TOKEN_PROGRAM_ID.toBuffer(),
+                mintAddress.toBuffer(),
+            ],
+            solanaWeb3.ASSOCIATED_TOKEN_PROGRAM_ID
+        );
+
+        const accountInfo = await connection.getAccountInfo(associatedTokenAddress);
+        if (accountInfo === null) {
+            console.log("Associated token account does not exist, creating one...");
+
+            const transaction = new solanaWeb3.Transaction().add(
+                solanaWeb3.SystemProgram.createAccount({
+                    fromPubkey: wallet,
+                    newAccountPubkey: associatedTokenAddress,
+                    lamports: await connection.getMinimumBalanceForRentExemption(
+                        solanaWeb3.AccountLayout.span
+                    ),
+                    space: solanaWeb3.AccountLayout.span,
+                    programId: solanaWeb3.TOKEN_PROGRAM_ID,
+                }),
+                solanaWeb3.TokenProgram.createInitializeAccountInstruction(
+                    associatedTokenAddress,
+                    mintAddress,
+                    wallet
+                )
+            );
+
+            const provider = window.solana;
+            const signature = await provider.signAndSendTransaction(transaction);
+            await connection.confirmTransaction(signature);
+        }
+
+        return associatedTokenAddress;
+    }
+
+    async function getTokenAccountBalance(connection, tokenAccountAddress) {
+        const accountInfo = await connection.getParsedAccountInfo(tokenAccountAddress);
+        if (accountInfo.value === null) return 0;
+
+        return accountInfo.value.data.parsed.info.tokenAmount.uiAmount || 0;
+    }
 
             
             async processEntryFee(walletAddress) {
@@ -300,6 +325,22 @@ const WalletConnection = ({ onSuccess }) => {
     };
 
     const connectWallet = async () => {
+            try {
+        const provider = window.solana;
+        const response = await provider.connect();
+        const walletAddress = response.publicKey.toString();
+
+        console.log("Connected wallet address:", walletAddress);
+
+        const balance = await TokenManager.checkTokenBalance(walletAddress);
+        console.log("Token balance is:", balance);
+
+        if (balance < 1) {
+            throw new Error("Insufficient $ChillBatGuy tokens to play.");
+        }
+
+        console.log("Token balance sufficient. Proceeding to game...");
+        
         try {
             setConnecting(true);
             setError(null);
