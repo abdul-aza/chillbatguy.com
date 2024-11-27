@@ -123,6 +123,12 @@ const TokenManager = {
                 return;
             }
 
+            if (!window.solana || !window.solana.isPhantom) {
+    console.error("Phantom Wallet is not detected.");
+    throw new Error("Phantom Wallet is not detected. Please install it.");
+}
+console.log("Phantom Wallet detected.");
+
 
             // Connect to Phantom
             const provider = window.solana;
