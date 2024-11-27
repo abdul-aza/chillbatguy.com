@@ -246,40 +246,78 @@
             const [isMobile] = useState(() => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
             const [transactionStatus, setTransactionStatus] = useState('');
 
-            const openPhantomApp = () => {
-                const tokenUrl = `https://phantom.app/ul/browse/tokens/${TOKEN_ADDRESS}?network=mainnet`;
-                window.location.href = isMobile ? `phantom://browse/${encodeURIComponent(tokenUrl)}` : tokenUrl;
-            };
+      const openPhantomApp = () => {
+    // Direct link to the token on Phantom for swapping
+    const tokenSwapUrl = `https://phantom.app/ul/swap?inputMint=So11111111111111111111111111111111111111112&outputMint=${TOKEN_ADDRESS}&fixed=out`;
+    
+    if (isMobile) {
+        // For mobile, use phantom:// protocol to open directly in app
+        window.location.href = `phantom://browse/${encodeURIComponent(tokenSwapUrl)}`;
+        
+        // Fallback for if Phantom isn't installed
+        setTimeout(() => {
+            window.location.href = 'https://phantom.app/download';
+        }, 1500);
+    } else {
+        // For desktop, check if Phantom extension exists first
+        if (window.phantom?.solana) {
+            window.open(tokenSwapUrl, '_blank');
+        } else {
+            window.open('https://phantom.app/download', '_blank');
+        }
+    }
+};
 
             //New Wallet connection
-        const connectWallet = async () => {
+            
+const connectWallet = async () => {
     try {
         setConnecting(true);
         setError(null);
-        setTransactionStatus('Connecting wallet...');
+        setTransactionStatus('Checking wallet...');
 
-        if (typeof window.solana === 'undefined' || !window.solana.isPhantom) {
-            throw new Error('Phantom Wallet is not installed. Please install it.');
+        if (isMobile) {
+            // Check if we're already in Phantom browser
+            const isPhantomBrowser = window.phantom?.solana?.isPhantom;
+            
+            if (!isPhantomBrowser) {
+                // If not in Phantom browser, deep link to open app
+                const currentUrl = window.location.href;
+                window.location.href = `phantom://browse/${encodeURIComponent(currentUrl)}`;
+                return;
+            }
+        } else {
+            // Desktop checks
+            if (!window.phantom?.solana) {
+                throw new Error("Please install Phantom Wallet extension");
+            }
         }
 
-        const provider = window.solana;
+        // Get provider (works for both mobile and desktop)
+        const provider = window.phantom?.solana;
         const response = await provider.connect();
         const address = response.publicKey.toString();
 
-        setTransactionStatus('Checking token balance...');
-        const balance = await TokenManager.checkTokenBalance(address);
+        try {
+            setTransactionStatus('Checking token balance...');
+            const balance = await TokenManager.checkTokenBalance(address);
+            
+            if (balance < ENTRY_FEE * Math.pow(10, 9)) {
+                throw new Error(`Insufficient $ChillBat balance. Need ${ENTRY_FEE} tokens to play.`);
+            }
 
-        if (balance < ENTRY_FEE * Math.pow(10, 9)) {
-            throw new Error(`Insufficient $ChillBat balance. Need ${ENTRY_FEE} tokens to play.`);
+            setTransactionStatus('Processing entry fee...');
+            await TokenManager.processEntryFee(address);
+            
+            setTransactionStatus('Ready to play!');
+            setTimeout(() => setTransactionStatus(''), 2000);
+            onSuccess(address);
+        } catch (balanceError) {
+            console.error('Balance check error:', balanceError);
+            throw new Error('Failed to check token balance. Please ensure you have enough $ChillBat tokens.');
         }
-
-        setTransactionStatus('Processing entry fee...');
-        await TokenManager.processEntryFee(address);
-
-        setTransactionStatus('Ready to play!');
-        setTimeout(() => setTransactionStatus(''), 2000);
-        onSuccess(address);
     } catch (err) {
+        console.error('Connection error:', err);
         setError(err.message);
         setTransactionStatus('');
     } finally {
