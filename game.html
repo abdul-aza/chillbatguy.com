@@ -112,45 +112,61 @@
         const TokenManager = {
             async checkTokenBalance(walletAddress) {
                 try {
-                    const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
+                    const connection = new solanaWeb3.Connection('https://api.devnet.solana.com');
                     const tokenAccount = await splToken.getAssociatedTokenAddress(
                         new solanaWeb3.PublicKey(TOKEN_ADDRESS),
                         new solanaWeb3.PublicKey(walletAddress)
-                    );
-                    const balance = await connection.getTokenAccountBalance(tokenAccount);
-                    return parseInt(balance.value.amount);
-                } catch (error) {
-                    console.error('Error checking balance:', error);
-                    throw new Error('Failed to check token balance');
-                }
-            },
+        );
 
+        // Ensure the token account exists
+                const accountInfo = await connection.getAccountInfo(tokenAccount);
+                if (!accountInfo) {
+                    return 0; // Token account doesn't exist; balance is zero.
+        }
+
+                const balance = await connection.getTokenAccountBalance(tokenAccount);
+                return parseInt(balance.value.amount);
+    }         catch (error) {
+                console.error('Error checking balance:', error);
+                throw new Error('Failed to check token balance');
+    }
+}
+
+            
             async processEntryFee(walletAddress) {
                 try {
-                    const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
+                    const connection = new solanaWeb3.Connection('https://api.devnet.solana.com');
+                    const fromTokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
+                        connection,
+                        new solanaWeb3.PublicKey(walletAddress),
+                        new solanaWeb3.PublicKey(TOKEN_ADDRESS),
+                        new solanaWeb3.PublicKey(walletAddress)
+        );
+
+                    const toTokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
+                        connection,
+                        new solanaWeb3.PublicKey(walletAddress),
+                        new solanaWeb3.PublicKey(TOKEN_ADDRESS),
+                        new solanaWeb3.PublicKey(TREASURY_WALLET)
+        );
+
                     const transaction = new solanaWeb3.Transaction().add(
                         splToken.createTransferInstruction(
-                            await splToken.getAssociatedTokenAddress(
-                                new solanaWeb3.PublicKey(TOKEN_ADDRESS),
-                                new solanaWeb3.PublicKey(walletAddress)
-                            ),
-                            await splToken.getAssociatedTokenAddress(
-                                new solanaWeb3.PublicKey(TOKEN_ADDRESS),
-                                new solanaWeb3.PublicKey(TREASURY_WALLET)
-                            ),
+                            fromTokenAccount.address,
+                            toTokenAccount.address,
                             new solanaWeb3.PublicKey(walletAddress),
                             ENTRY_FEE * Math.pow(10, 9)
-                        )
-                    );
+            )
+        );
 
-                    const signed = await window.solana.signAndSendTransaction(transaction);
-                    await connection.confirmTransaction(signed.signature);
-                    return true;
-                } catch (error) {
-                    console.error('Error processing entry fee:', error);
-                    throw new Error('Failed to process entry fee');
-                }
-            },
+        const signed = await window.solana.signAndSendTransaction(transaction);
+        await connection.confirmTransaction(signed.signature);
+        return true;
+    } catch (error) {
+        console.error('Error processing entry fee:', error);
+        throw new Error('Failed to process entry fee');
+    }
+}
 
             async sendReward(walletAddress) {
                 try {
@@ -235,42 +251,34 @@
                 window.location.href = isMobile ? `phantom://browse/${encodeURIComponent(tokenUrl)}` : tokenUrl;
             };
 
-            
-            
-            const connectWallet = async () => {
+            //New Wallet connection
+        const connectWallet = async () => {
     try {
         setConnecting(true);
         setError(null);
         setTransactionStatus('Connecting wallet...');
 
-        if (isMobile) {
-            const gameUrl = window.location.href;
-            window.location.href = `https://phantom.app/ul/browse/${encodeURIComponent(gameUrl)}`;
-            return;
+        if (typeof window.solana === 'undefined' || !window.solana.isPhantom) {
+            throw new Error('Phantom Wallet is not installed. Please install it.');
         }
 
-        // Desktop connection
-        if (typeof window.phantom?.solana?.isPhantom === 'undefined') {
-            throw new Error("Please install Phantom Wallet");
-        }
-
-        const provider = window.phantom?.solana;
+        const provider = window.solana;
         const response = await provider.connect();
         const address = response.publicKey.toString();
 
         setTransactionStatus('Checking token balance...');
-        /const balance = await TokenManager.checkTokenBalance(address);
-                    if (balance < ENTRY_FEE * Math.pow(10, 9)) {
-                        throw new Error(`Insufficient $ChillBat balance. Need ${ENTRY_FEE} tokens to play.`);
-                    }
+        const balance = await TokenManager.checkTokenBalance(address);
 
-                    setTransactionStatus('Processing entry fee...');
-                    await TokenManager.processEntryFee(address);
-                    
-                    setTransactionStatus('Ready to play!');
-                    setTimeout(() => setTransactionStatus(''), 2000);
-                    onSuccess(address);
+        if (balance < ENTRY_FEE * Math.pow(10, 9)) {
+            throw new Error(`Insufficient $ChillBat balance. Need ${ENTRY_FEE} tokens to play.`);
+        }
 
+        setTransactionStatus('Processing entry fee...');
+        await TokenManager.processEntryFee(address);
+
+        setTransactionStatus('Ready to play!');
+        setTimeout(() => setTransactionStatus(''), 2000);
+        onSuccess(address);
     } catch (err) {
         setError(err.message);
         setTransactionStatus('');
@@ -278,6 +286,8 @@
         setConnecting(false);
     }
 };
+            //Wallet connection done
+
              
 
             return (
