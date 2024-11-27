@@ -274,7 +274,7 @@ const connectWallet = async () => {
 
         if (isMobile) {
             // Check if we're already in Phantom browser
-            const isPhantomBrowser = window.phantom?.solana?.isPhantom;
+            const isPhantomBrowser = window.phantom && window.phantom.solana && window.phantom.solana.isPhantom;
             
             if (!isPhantomBrowser) {
                 // If not in Phantom browser, deep link to open app
