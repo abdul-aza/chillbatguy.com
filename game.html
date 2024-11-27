@@ -133,7 +133,7 @@
 }
 
             
-                asyncfunction processEntryFee(walletAddress) {
+                async function processEntryFee(walletAddress) {
                     try {
                         const connection = new solanaWeb3.Connection('https://api.devnet.solana.com');
                         const fromTokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
