@@ -126,7 +126,7 @@
 
                     console.log("Checking wallet connection...");
 
-                    const connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl("devnet"));
+                    const connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl("mainnet-beta"));
                     const publicKey = new solanaWeb3.PublicKey(walletAddress);
 
                     const tokenAccountAddress = await getOrCreateAssociatedTokenAccount(
@@ -148,7 +148,7 @@
 
             async processEntryFee(walletAddress) {
                 try {
-                    const connection = new solanaWeb3.Connection('https://api.devnet.solana.com');
+                    const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
                     const fromTokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
                         connection,
                         new solanaWeb3.PublicKey(walletAddress),
@@ -183,7 +183,7 @@
 
             async sendReward(walletAddress) {
                 try {
-                    const connection = new solanaWeb3.Connection('https://api.devnet.solana.com');
+                    const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
                     const transaction = new solanaWeb3.Transaction().add(
                         splToken.createTransferInstruction(
                             await splToken.getAssociatedTokenAddress(
