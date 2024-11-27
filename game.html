@@ -133,36 +133,36 @@
 }
 
             
-            async processEntryFee(walletAddress) {
-                try {
-                    const connection = new solanaWeb3.Connection('https://api.devnet.solana.com');
-                    const fromTokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
-                        connection,
-                        new solanaWeb3.PublicKey(walletAddress),
-                        new solanaWeb3.PublicKey(TOKEN_ADDRESS),
-                        new solanaWeb3.PublicKey(walletAddress)
-        );
-
-                    const toTokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
-                        connection,
-                        new solanaWeb3.PublicKey(walletAddress),
-                        new solanaWeb3.PublicKey(TOKEN_ADDRESS),
-                        new solanaWeb3.PublicKey(TREASURY_WALLET)
-        );
-
-                    const transaction = new solanaWeb3.Transaction().add(
-                        splToken.createTransferInstruction(
-                            fromTokenAccount.address,
-                            toTokenAccount.address,
+                asyncfunction processEntryFee(walletAddress) {
+                    try {
+                        const connection = new solanaWeb3.Connection('https://api.devnet.solana.com');
+                        const fromTokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
+                            connection,
                             new solanaWeb3.PublicKey(walletAddress),
-                            ENTRY_FEE * Math.pow(10, 9)
+                            new solanaWeb3.PublicKey(TOKEN_ADDRESS),
+                            new solanaWeb3.PublicKey(walletAddress)
+        );
+
+                        const toTokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
+                        connection,
+                            new solanaWeb3.PublicKey(walletAddress),
+                            new solanaWeb3.PublicKey(TOKEN_ADDRESS),
+                            new solanaWeb3.PublicKey(TREASURY_WALLET)
+        );
+
+                        const transaction = new solanaWeb3.Transaction().add(
+                            splToken.createTransferInstruction(
+                                fromTokenAccount.address,
+                                toTokenAccount.address,
+                                new solanaWeb3.PublicKey(walletAddress),
+                                ENTRY_FEE * Math.pow(10, 9)
             )
         );
 
-        const signed = await window.solana.signAndSendTransaction(transaction);
-        await connection.confirmTransaction(signed.signature);
-        return true;
-    } catch (error) {
+                    const signed = await window.solana.signAndSendTransaction(transaction);
+                    await connection.confirmTransaction(signed.signature);
+                    return true;
+                } catch (error) {
         console.error('Error processing entry fee:', error);
         throw new Error('Failed to process entry fee');
     }
