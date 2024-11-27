@@ -4,9 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chill Bat Guy Game</title>
+    <!-- Core React -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    <!-- Solana -->
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <script src="https://unpkg.com/@solana/spl-token@latest/lib/index.iife.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
         body {
@@ -77,6 +81,18 @@
             z-index: 100;
             min-width: 200px;
         }
+        .transaction-status {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            z-index: 1000;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -88,8 +104,81 @@
 
         // Constants
         const TOKEN_ADDRESS = "HwS3GFzAE8BFpL5jTu6Sm5DyMofaGRjpNrzq9yMS6yXE";
+        const TREASURY_WALLET = "7gitjQR4y3JdchHaGLm8XLFqYkA8LACm1dXUCk6ArpuQ";
         const ENTRY_FEE = 1000;
         const WINNING_PAYOUT = 3000;
+
+        // Token Transaction Manager
+        const TokenManager = {
+            async checkTokenBalance(walletAddress) {
+                try {
+                    const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
+                    const tokenAccount = await splToken.getAssociatedTokenAddress(
+                        new solanaWeb3.PublicKey(TOKEN_ADDRESS),
+                        new solanaWeb3.PublicKey(walletAddress)
+                    );
+                    const balance = await connection.getTokenAccountBalance(tokenAccount);
+                    return parseInt(balance.value.amount);
+                } catch (error) {
+                    console.error('Error checking balance:', error);
+                    throw new Error('Failed to check token balance');
+                }
+            },
+
+            async processEntryFee(walletAddress) {
+                try {
+                    const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
+                    const transaction = new solanaWeb3.Transaction().add(
+                        splToken.createTransferInstruction(
+                            await splToken.getAssociatedTokenAddress(
+                                new solanaWeb3.PublicKey(TOKEN_ADDRESS),
+                                new solanaWeb3.PublicKey(walletAddress)
+                            ),
+                            await splToken.getAssociatedTokenAddress(
+                                new solanaWeb3.PublicKey(TOKEN_ADDRESS),
+                                new solanaWeb3.PublicKey(TREASURY_WALLET)
+                            ),
+                            new solanaWeb3.PublicKey(walletAddress),
+                            ENTRY_FEE * Math.pow(10, 9)
+                        )
+                    );
+
+                    const signed = await window.solana.signAndSendTransaction(transaction);
+                    await connection.confirmTransaction(signed.signature);
+                    return true;
+                } catch (error) {
+                    console.error('Error processing entry fee:', error);
+                    throw new Error('Failed to process entry fee');
+                }
+            },
+
+            async sendReward(walletAddress) {
+                try {
+                    const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
+                    const transaction = new solanaWeb3.Transaction().add(
+                        splToken.createTransferInstruction(
+                            await splToken.getAssociatedTokenAddress(
+                                new solanaWeb3.PublicKey(TOKEN_ADDRESS),
+                                new solanaWeb3.PublicKey(TREASURY_WALLET)
+                            ),
+                            await splToken.getAssociatedTokenAddress(
+                                new solanaWeb3.PublicKey(TOKEN_ADDRESS),
+                                new solanaWeb3.PublicKey(walletAddress)
+                            ),
+                            new solanaWeb3.PublicKey(TREASURY_WALLET),
+                            WINNING_PAYOUT * Math.pow(10, 9)
+                        )
+                    );
+
+                    const signed = await window.solana.signAndSendTransaction(transaction);
+                    await connection.confirmTransaction(signed.signature);
+                    return true;
+                } catch (error) {
+                    console.error('Error sending reward:', error);
+                    throw new Error('Failed to send reward');
+                }
+            }
+        };
 
         // LeaderboardManager
         const LeaderboardManager = {
@@ -126,32 +215,63 @@
             }
         };
 
+        // Transaction Status Component
+        const TransactionStatus = ({ message, isError }) => (
+            <div className="transaction-status">
+                <p className={isError ? "text-red-500" : "text-green-500"}>
+                    {message}
+                </p>
+            </div>
+        );
+        // WalletConnection Component
         const WalletConnection = ({ onSuccess }) => {
             const [connecting, setConnecting] = useState(false);
             const [error, setError] = useState(null);
             const [isMobile] = useState(() => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
+            const [transactionStatus, setTransactionStatus] = useState('');
 
             const openPhantomApp = () => {
                 const tokenUrl = `https://phantom.app/ul/browse/tokens/${TOKEN_ADDRESS}?network=mainnet`;
-                window.location.href = tokenUrl;
+                window.location.href = isMobile ? `phantom://browse/${encodeURIComponent(tokenUrl)}` : tokenUrl;
             };
 
             const connectWallet = async () => {
                 try {
+                    setConnecting(true);
+                    setError(null);
+                    setTransactionStatus('Connecting wallet...');
+
+                    let response;
                     if (isMobile) {
                         const gameUrl = window.location.href;
                         window.location.href = `https://phantom.app/ul/browse/${encodeURIComponent(gameUrl)}`;
                         return;
+                    } else {
+                        if (!window.solana?.isPhantom) {
+                            throw new Error("Please install Phantom Wallet");
+                        }
+                        response = await window.solana.connect();
                     }
 
-                    if (!window.solana || !window.solana.isPhantom) {
-                        throw new Error("Please install Phantom Wallet");
+                    const address = response.publicKey.toString();
+                    
+                    setTransactionStatus('Checking token balance...');
+                    const balance = await TokenManager.checkTokenBalance(address);
+                    if (balance < ENTRY_FEE * Math.pow(10, 9)) {
+                        throw new Error(`Insufficient $ChillBat balance. Need ${ENTRY_FEE} tokens to play.`);
                     }
 
-                    const response = await window.solana.connect();
-                    onSuccess(response.publicKey.toString());
+                    setTransactionStatus('Processing entry fee...');
+                    await TokenManager.processEntryFee(address);
+                    
+                    setTransactionStatus('Ready to play!');
+                    setTimeout(() => setTransactionStatus(''), 2000);
+                    onSuccess(address);
                 } catch (err) {
                     setError(err.message);
+                    setTransactionStatus('');
+                } finally {
+                    setConnecting(false);
                 }
             };
 
@@ -182,6 +302,10 @@
                             </button>
                         </div>
                         
+                        {transactionStatus && (
+                            <p className="text-white text-center mt-4">{transactionStatus}</p>
+                        )}
+                        
                         {error && (
                             <p className="text-red-500 mt-4 text-center">{error}</p>
                         )}
@@ -190,6 +314,7 @@
             );
         };
 
+        // Leaderboard Component
         const Leaderboard = ({ show }) => {
             const [scores, setScores] = useState([]);
 
@@ -214,6 +339,7 @@
             );
         };
 
+        // PlayerStats Component
         const PlayerStats = ({ wallet, show }) => {
             const [stats, setStats] = useState({});
 
@@ -238,6 +364,7 @@
             );
         };
 
+        // Main Game Component
         const ChillBatGame = () => {
             const [gameStarted, setGameStarted] = useState(false);
             const [gameOver, setGameOver] = useState(false);
@@ -300,12 +427,19 @@
 
             useEffect(() => {
                 if (gameOver && walletAddress) {
+                    const finalScore = Math.floor(score / 50);
                     const gameResult = {
                         score: score,
-                        won: Math.floor(score / 50) >= 60
+                        won: finalScore >= 60
                     };
+                    
                     LeaderboardManager.addScore(walletAddress, score);
                     LeaderboardManager.updatePlayerStats(walletAddress, gameResult);
+
+                    if (gameResult.won) {
+                        TokenManager.sendReward(walletAddress)
+                            .catch(error => console.error('Failed to send reward:', error));
+                    }
                 }
             }, [gameOver, score, walletAddress]);
 
