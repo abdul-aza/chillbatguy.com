@@ -240,128 +240,147 @@
             </div>
         );
         // WalletConnection Component
-        const WalletConnection = ({ onSuccess }) => {
-            const [connecting, setConnecting] = useState(false);
-            const [error, setError] = useState(null);
-            const [isMobile] = useState(() => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
-            const [transactionStatus, setTransactionStatus] = useState('');
+// This goes after your LeaderboardManager code and before the Leaderboard component
+const WalletConnection = ({ onSuccess }) => {
+    const [connecting, setConnecting] = useState(false);
+    const [error, setError] = useState(null);
+    const [isMobile] = useState(() => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
+    const [transactionStatus, setTransactionStatus] = useState('');
+    const [showBuyOption, setShowBuyOption] = useState(false);  // New state variable
 
-        const openPhantomApp = () => {
-            const tokenSwapUrl = `https://phantom.app/ul/swap?inputMint=So11111111111111111111111111111111111111112&outputMint=${TOKEN_ADDRESS}&fixed=out`;
-    
-            if (isMobile) {
-                window.location.href = `phantom://browse/${encodeURIComponent(tokenSwapUrl)}`;
-                setTimeout(() => {
-                    window.location.href = 'https://phantom.app/download';
-                }, 1500);
-            } else {
-                if (window.phantom && window.phantom.solana) {
-                    window.open(tokenSwapUrl, '_blank');
-                } else {
-                    window.open('https://phantom.app/download', '_blank');
-                }
-            }
-        };
-        
-
-            //New Wallet connection
-            
-const connectWallet = async () => {
-    try {
-        setConnecting(true);
-        setError(null);
-        setTransactionStatus('Checking wallet...');
+    const openPhantomApp = () => {
+        const tokenSwapUrl = `https://phantom.app/ul/swap` + 
+            `?outputMint=${TOKEN_ADDRESS}` + 
+            `&inputMint=So11111111111111111111111111111111111111112` + 
+            `&fixed=out` + 
+            `&amount=${ENTRY_FEE}`;
 
         if (isMobile) {
-            // Check if we're already in Phantom browser
-            const isPhantomBrowser = window.phantom && window.phantom.solana && window.phantom.solana.isPhantom;
-            
-            if (!isPhantomBrowser) {
-                // If not in Phantom browser, deep link to open app
-                const currentUrl = window.location.href;
-                window.location.href = `phantom://browse/${encodeURIComponent(currentUrl)}`;
-                return;
-            }
+            window.location.href = `phantom://browse/${encodeURIComponent(tokenSwapUrl)}`;
+            setTimeout(() => {
+                if (!window.phantom || !window.phantom.solana) {
+                    window.location.href = 'https://phantom.app/download';
+                }
+            }, 1500);
         } else {
-            // Desktop checks
-            if (!window.phantom || !window.phantom.solana) {
-                throw new Error("Please install Phantom Wallet extension");
+            const hasPhantom = window.phantom && window.phantom.solana;
+            if (hasPhantom) {
+                window.open(tokenSwapUrl, '_blank');
+            } else {
+                window.open('https://phantom.app/download', '_blank');
             }
         }
+    };
 
-        // Get provider (works for both mobile and desktop)
-        const provider = window.phantom && window.phantom.solana;
-        const response = await provider.connect();
-        const address = response.publicKey.toString();
-
+    const connectWallet = async () => {
         try {
+            setConnecting(true);
+            setError(null);
+            setTransactionStatus('Initializing connection...');
+            setShowBuyOption(false);  // Reset buy option state
+
+            let provider;
+            if (isMobile) {
+                const isInPhantomBrowser = window.phantom && window.phantom.solana;
+                
+                if (!isInPhantomBrowser) {
+                    const currentUrl = encodeURIComponent(window.location.href);
+                    const phantomUrl = `phantom://browse/${currentUrl}`;
+                    window.location.href = phantomUrl;
+                    return;
+                }
+                provider = window.phantom.solana;
+            } else {
+                if (!window.phantom || !window.phantom.solana) {
+                    throw new Error("Please install Phantom Wallet extension first");
+                }
+                provider = window.phantom.solana;
+            }
+
+            setTransactionStatus('Connecting to wallet...');
+            const connectResponse = await provider.connect();
+            const userAddress = connectResponse.publicKey.toString();
+
             setTransactionStatus('Checking token balance...');
-            const balance = await TokenManager.checkTokenBalance(address);
-            
-            if (balance < ENTRY_FEE * Math.pow(10, 9)) {
-                throw new Error(`Insufficient $ChillBat balance. Need ${ENTRY_FEE} tokens to play.`);
+            const balance = await TokenManager.checkTokenBalance(userAddress);
+            const requiredBalance = ENTRY_FEE * Math.pow(10, 9);
+
+            if (balance < requiredBalance) {
+                setTransactionStatus('Insufficient balance');
+                const needMore = ENTRY_FEE - (balance / Math.pow(10, 9));
+                setShowBuyOption(true);  // Show buy option when balance is insufficient
+                throw new Error(`You need ${needMore.toFixed(2)} more $ChillBat to play.`);
             }
 
             setTransactionStatus('Processing entry fee...');
-            await TokenManager.processEntryFee(address);
+            const success = await TokenManager.processEntryFee(userAddress);
             
+            if (!success) {
+                throw new Error("Transaction failed. Please try again.");
+            }
+
             setTransactionStatus('Ready to play!');
             setTimeout(() => setTransactionStatus(''), 2000);
-            onSuccess(address);
-        } catch (balanceError) {
-            console.error('Balance check error:', balanceError);
-            throw new Error('Failed to check token balance. Please ensure you have enough $ChillBat tokens.');
+            onSuccess(userAddress);
+
+        } catch (error) {
+            console.error('Connection error:', error);
+            setError(error.message);
+        } finally {
+            setConnecting(false);
         }
-    } catch (err) {
-        console.error('Connection error:', err);
-        setError(err.message);
-        setTransactionStatus('');
-    } finally {
-        setConnecting(false);
-    }
-}
-            //Wallet connection done
-
-             
-
-            return (
-                <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75">
-                    <div className="bg-gray-900 p-8 rounded-lg max-w-md w-full mx-4">
-                        <h2 className="text-2xl text-white font-bold mb-6">Welcome to ChillBat Game</h2>
-                        <p className="text-gray-300 mb-6">
-                            Play with $ChillBat tokens<br/>
-                            Entry Fee: {ENTRY_FEE} $ChillBat<br/>
-                            Win {WINNING_PAYOUT} $ChillBat by reaching score 60!
-                        </p>
-                        
-                        <div className="space-y-4">
-                            <button
-                                onClick={openPhantomApp}
-                                className="w-full bg-purple-600 text-white py-3 px-6 rounded-lg hover:bg-purple-700 transition-colors"
-                            >
-                                Buy $ChillBat
-                            </button>
-
-                            <button
-                                onClick={connectWallet}
-                                disabled={connecting}
-                                className="w-full bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                            >
-                                {connecting ? 'Connecting...' : 'Enter Game (5 tries)'}
-                            </button>
-                        </div>
-                        
-                        {transactionStatus && (
-                            <p className="text-white text-center mt-4">{transactionStatus}</p>
-                        )}
-                        
-                        {error && (
-                            <p className="text-red-500 mt-4 text-center">{error}</p>
-                        )}
-                    </div>
-                </div>
-            );
     };
+
+    return (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75">
+            <div className="bg-gray-900 p-8 rounded-lg max-w-md w-full mx-4">
+                <h2 className="text-2xl text-white font-bold mb-6">Welcome to ChillBat Game</h2>
+                <p className="text-gray-300 mb-6">
+                    Play with $ChillBat tokens<br/>
+                    Entry Fee: {ENTRY_FEE} $ChillBat<br/>
+                    Win {WINNING_PAYOUT} $ChillBat by reaching score 60!
+                </p>
+                
+                <div className="space-y-4">
+                    <button
+                        onClick={openPhantomApp}
+                        className="w-full bg-purple-600 text-white py-3 px-6 rounded-lg hover:bg-purple-700 transition-colors"
+                    >
+                        Buy $ChillBat
+                    </button>
+
+                    <button
+                        onClick={connectWallet}
+                        disabled={connecting}
+                        className="w-full bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                    >
+                        {connecting ? 'Connecting...' : 'Enter Game (5 tries)'}
+                    </button>
+                </div>
+                
+                {transactionStatus && (
+                    <p className="text-white text-center mt-4">{transactionStatus}</p>
+                )}
+                
+                {error && !showBuyOption && (
+                    <p className="text-red-500 mt-4 text-center">{error}</p>
+                )}
+                
+                {error && showBuyOption && (
+                    <div className="mt-4">
+                        <p className="text-red-500 text-center mb-2">{error}</p>
+                        <button
+                            onClick={openPhantomApp}
+                            className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors"
+                        >
+                            Buy More $ChillBat
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
         
         // Leaderboard Component
         const Leaderboard = ({ show }) => {
