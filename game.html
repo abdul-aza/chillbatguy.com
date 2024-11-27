@@ -246,27 +246,23 @@
             const [isMobile] = useState(() => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
             const [transactionStatus, setTransactionStatus] = useState('');
 
-      const openPhantomApp = () => {
-    // Direct link to the token on Phantom for swapping
-    const tokenSwapUrl = `https://phantom.app/ul/swap?inputMint=So11111111111111111111111111111111111111112&outputMint=${TOKEN_ADDRESS}&fixed=out`;
+        const openPhantomApp = () => {
+            const tokenSwapUrl = `https://phantom.app/ul/swap?inputMint=So11111111111111111111111111111111111111112&outputMint=${TOKEN_ADDRESS}&fixed=out`;
     
-    if (isMobile) {
-        // For mobile, use phantom:// protocol to open directly in app
-        window.location.href = `phantom://browse/${encodeURIComponent(tokenSwapUrl)}`;
-        
-        // Fallback for if Phantom isn't installed
-        setTimeout(() => {
-            window.location.href = 'https://phantom.app/download';
-        }, 1500);
-    } else {
-        // For desktop, check if Phantom extension exists first
-        if (window.phantom?.solana) {
-            window.open(tokenSwapUrl, '_blank');
-        } else {
-            window.open('https://phantom.app/download', '_blank');
-        }
-    }
-};
+            if (isMobile) {
+                window.location.href = `phantom://browse/${encodeURIComponent(tokenSwapUrl)}`;
+                setTimeout(() => {
+                    window.location.href = 'https://phantom.app/download';
+                }, 1500);
+            } else {
+                if (window.phantom?.solana) {
+                    window.open(tokenSwapUrl, '_blank');
+                } else {
+                    window.open('https://phantom.app/download', '_blank');
+                }
+            }
+        };
+        };
 
             //New Wallet connection
             
