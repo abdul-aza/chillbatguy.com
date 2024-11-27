@@ -255,7 +255,7 @@
                     window.location.href = 'https://phantom.app/download';
                 }, 1500);
             } else {
-                if (window.phantom?.solana) {
+                if (window.phantom && window.phantom.solana) {
                     window.open(tokenSwapUrl, '_blank');
                 } else {
                     window.open('https://phantom.app/download', '_blank');
