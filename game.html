@@ -112,7 +112,10 @@
         const TokenManager = {
             async checkTokenBalance(walletAddress) {
                 try {
-                    const connection = new solanaWeb3.Connection('https://api.devnet.solana.com');
+                    
+                    const solanaWeb3 = require('@solana/web3.js');
+                    const splToken = require('@solana/spl-token');
+                    const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
                     const tokenAccount = await splToken.getAssociatedTokenAddress(
                         new solanaWeb3.PublicKey(TOKEN_ADDRESS),
                         new solanaWeb3.PublicKey(walletAddress)
