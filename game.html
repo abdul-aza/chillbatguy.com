@@ -284,13 +284,13 @@ const connectWallet = async () => {
             }
         } else {
             // Desktop checks
-            if (!window.phantom?.solana) {
+            if (!window.phantom || !window.phantom.solana) {
                 throw new Error("Please install Phantom Wallet extension");
             }
         }
 
         // Get provider (works for both mobile and desktop)
-        const provider = window.phantom?.solana;
+        const provider = window.phantom && window.phantom.solana;
         const response = await provider.connect();
         const address = response.publicKey.toString();
 
