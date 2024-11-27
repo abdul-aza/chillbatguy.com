@@ -9,8 +9,8 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
     <!-- Solana -->
-    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-    <script src="https://unpkg.com/@solana/spl-token@latest/lib/index.iife.min.js"></script>
+    <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@solana/spl-token@0.3.8/lib/index.iife.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
         body {
@@ -235,28 +235,31 @@
                 window.location.href = isMobile ? `phantom://browse/${encodeURIComponent(tokenUrl)}` : tokenUrl;
             };
 
+            
+            
             const connectWallet = async () => {
-                try {
-                    setConnecting(true);
-                    setError(null);
-                    setTransactionStatus('Connecting wallet...');
+    try {
+        setConnecting(true);
+        setError(null);
+        setTransactionStatus('Connecting wallet...');
 
-                    let response;
-                    if (isMobile) {
-                        const gameUrl = window.location.href;
-                        window.location.href = `https://phantom.app/ul/browse/${encodeURIComponent(gameUrl)}`;
-                        return;
-                    } else {
-                        if (!window.solana?.isPhantom) {
-                            throw new Error("Please install Phantom Wallet");
-                        }
-                        response = await window.solana.connect();
-                    }
+        if (isMobile) {
+            const gameUrl = window.location.href;
+            window.location.href = `https://phantom.app/ul/browse/${encodeURIComponent(gameUrl)}`;
+            return;
+        }
 
-                    const address = response.publicKey.toString();
-                    
-                    setTransactionStatus('Checking token balance...');
-                    const balance = await TokenManager.checkTokenBalance(address);
+        // Desktop connection
+        if (typeof window.phantom?.solana?.isPhantom === 'undefined') {
+            throw new Error("Please install Phantom Wallet");
+        }
+
+        const provider = window.phantom?.solana;
+        const response = await provider.connect();
+        const address = response.publicKey.toString();
+
+        setTransactionStatus('Checking token balance...');
+        /const balance = await TokenManager.checkTokenBalance(address);
                     if (balance < ENTRY_FEE * Math.pow(10, 9)) {
                         throw new Error(`Insufficient $ChillBat balance. Need ${ENTRY_FEE} tokens to play.`);
                     }
@@ -267,13 +270,15 @@
                     setTransactionStatus('Ready to play!');
                     setTimeout(() => setTransactionStatus(''), 2000);
                     onSuccess(address);
-                } catch (err) {
-                    setError(err.message);
-                    setTransactionStatus('');
-                } finally {
-                    setConnecting(false);
-                }
-            };
+
+    } catch (err) {
+        setError(err.message);
+        setTransactionStatus('');
+    } finally {
+        setConnecting(false);
+    }
+};
+             
 
             return (
                 <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75">
