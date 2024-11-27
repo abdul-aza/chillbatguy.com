@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chill Bat Guy Game</title>
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@solana/spl-token@0.3.8/lib/index.iife.min.js"></script>
+<script type="text/babel"></script>
+
     <!-- Core React -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -117,6 +121,7 @@ const TokenManager = {
                 throw new Error("Phantom Wallet is not detected. Please install it.");
             }
             console.log("Phantom Wallet detected.");
+            console.log("splToken defined:", typeof splToken !== "undefined");
 
             // Connect to Phantom
             const provider = window.solana;
