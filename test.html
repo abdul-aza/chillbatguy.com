@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Basic Phantom Connect</title>
+    
+    <!-- We only need web3.js for the basic connection -->
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
+
+    <style>
+        .connect-button {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px 40px;
+            font-size: 18px;
+            background: purple;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .connect-button:hover {
+            background: #800080;
+        }
+    </style>
+</head>
+<body>
+    <button id="connectButton" class="connect-button">Connect Phantom Wallet</button>
+
+    <script>
+        document.getElementById('connectButton').addEventListener('click', async () => {
+            try {
+                // First check if Phantom is available
+                if ("solana" in window) {
+                    const provider = window.solana;
+                    if (provider.isPhantom) {
+                        // Connect to the wallet
+                        const response = await provider.connect();
+                        const publicKey = response.publicKey.toString();
+                        console.log("Connected! Public key:", publicKey);
+                        // Update button text
+                        document.getElementById('connectButton').textContent = `Connected: ${publicKey.slice(0, 4)}...${publicKey.slice(-4)}`;
+                    } else {
+                        alert("Please install Phantom wallet");
+                    }
+                } else {
+                    alert("Please install Phantom wallet");
+                }
+            } catch (error) {
+                console.error(error);
+                alert("Error connecting to wallet");
+            }
+        });
+    </script>
+</body>
+</html>
