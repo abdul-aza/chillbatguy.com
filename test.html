@@ -1,122 +1,30 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Phantom Connect and Buy</title>
-    
-    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
+async function openPhantomSwap() {
+    const phantom = window.solana && window.solana.isPhantom ? window.solana : null;
 
-    <style>
-        .button-container {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
+    if (!phantom) {
+        alert("Phantom wallet not detected. Redirecting to download page.");
+        window.open('https://phantom.app/download', '_blank');
+        return;
+    }
+
+    try {
+        const swapUrl = `https://phantom.app/ul/swap` +
+            `?outputMint=${encodeURIComponent(TOKEN_ADDRESS)}` +
+            `&inputMint=${encodeURIComponent(SOL_ADDRESS)}` +
+            `&fixed=out` +
+            `&amount=1000`;
+
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+        console.log("Opening swap URL:", swapUrl);
+
+        if (isMobile) {
+            window.location.href = `phantom://browse/${encodeURIComponent(swapUrl)}`;
+        } else {
+            window.open(swapUrl, '_blank');
         }
-        
-        .phantom-button {
-            padding: 20px 40px;
-            font-size: 18px;
-            background: purple;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-        }
-        
-        .phantom-button:hover {
-            background: #800080;
-        }
-    </style>
-</head>
-<body>
-    <div class="button-container">
-        <button id="connectButton" class="phantom-button">Connect Phantom Wallet</button>
-        <button id="buyButton" class="phantom-button">Buy $ChillBat</button>
-    </div>
-
-    <script>
-        const TOKEN_ADDRESS = "HwS3GFzAE8BFpL5jTu6Sm5DyMofaGRjpNrzq9yMS6yXE";
-        const SOL_ADDRESS = "So11111111111111111111111111111111111111112";
-        
-        // Function to wait for Phantom to be injected
-        function waitForPhantom() {
-            return new Promise((resolve) => {
-                if ("solana" in window) {
-                    resolve(window.solana);
-                    return;
-                }
-
-                let attempts = 0;
-                const checkForPhantom = setInterval(() => {
-                    attempts += 1;
-                    if ("solana" in window) {
-                        clearInterval(checkForPhantom);
-                        resolve(window.solana);
-                    } else if (attempts > 50) { // Stop checking after 5 seconds
-                        clearInterval(checkForPhantom);
-                        resolve(null);
-                    }
-                }, 100);
-            });
-        }
-
-        // Function to open Phantom's swap interface
-        async function openPhantomSwap() {
-            const phantom = await waitForPhantom();
-            
-            if (!phantom) {
-                alert("Phantom wallet not detected. Redirecting to download page.");
-                window.open('https://phantom.app/download', '_blank');
-                return;
-            }
-
-            const swapUrl = `https://phantom.app/ul/swap?` +
-                `outputMint=${encodeURIComponent(TOKEN_ADDRESS)}` +
-                `&inputMint=${encodeURIComponent(SOL_ADDRESS)}` +
-                `&fixed=out` +
-                `&amount=1000`;
-
-            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-            
-            if (isMobile) {
-                window.location.href = `phantom://browse/${encodeURIComponent(swapUrl)}`;
-            } else {
-                window.open(swapUrl, '_blank');
-            }
-        }
-
-        // Initialize the connect button
-        async function initializeWallet() {
-            const phantom = await waitForPhantom();
-            
-            document.getElementById('connectButton').addEventListener('click', async () => {
-                try {
-                    if (phantom && phantom.isPhantom) {
-                        const response = await phantom.connect();
-                        const publicKey = response.publicKey.toString();
-                        console.log("Connected! Public key:", publicKey);
-                        document.getElementById('connectButton').textContent = 
-                            `Connected: ${publicKey.slice(0, 4)}...${publicKey.slice(-4)}`;
-                    } else {
-                        alert("Please install Phantom wallet");
-                    }
-                } catch (error) {
-                    console.error(error);
-                    alert("Error connecting to wallet");
-                }
-            });
-        }
-
-        // Initialize buy button
-        document.getElementById('buyButton').addEventListener('click', openPhantomSwap);
-
-        // Initialize the wallet when the page loads
-        initializeWallet();
-    </script>
-</body>
-</html>
+    } catch (error) {
+        console.error("Error opening Phantom swap:", error);
+        alert("Failed to open Phantom swap interface.");
+    }
+}
