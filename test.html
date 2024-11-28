@@ -3,17 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Basic Phantom Connect</title>
+    <title>Phantom Connect and Buy</title>
     
-    <!-- We only need web3.js for the basic connection -->
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
 
     <style>
-        .connect-button {
+        .button-container {
             position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .phantom-button {
             padding: 20px 40px;
             font-size: 18px;
             background: purple;
@@ -22,27 +27,66 @@
             border-radius: 8px;
             cursor: pointer;
         }
-        .connect-button:hover {
+        
+        .phantom-button:hover {
             background: #800080;
         }
     </style>
 </head>
 <body>
-    <button id="connectButton" class="connect-button">Connect Phantom Wallet</button>
+    <div class="button-container">
+        <button id="connectButton" class="phantom-button">Connect Phantom Wallet</button>
+        <button id="buyButton" class="phantom-button">Buy $ChillBat</button>
+    </div>
 
     <script>
+        // Token address for ChillBat
+        const TOKEN_ADDRESS = "HwS3GFzAE8BFpL5jTu6Sm5DyMofaGRjpNrzq9yMS6yXE";
+        // Native SOL token address (needed for swap)
+        const SOL_ADDRESS = "So11111111111111111111111111111111111111112";
+        
+        // Function to open Phantom's swap interface
+        function openPhantomSwap() {
+            // Construct the swap URL with parameters
+            const swapUrl = `https://phantom.app/ul/swap?` +
+                `outputMint=${TOKEN_ADDRESS}` +  // The token we want to buy (ChillBat)
+                `&inputMint=${SOL_ADDRESS}` +    // We're paying with SOL
+                `&fixed=out` +                   // We're specifying how much we want to buy
+                `&amount=1000`;                  // Amount of ChillBat tokens to buy
+
+            // Check if we're on mobile
+            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+            
+            if (isMobile) {
+                // For mobile, use the phantom:// protocol
+                window.location.href = `phantom://browse/${encodeURIComponent(swapUrl)}`;
+                // Fallback to download page if Phantom isn't installed
+                setTimeout(() => {
+                    if (!("solana" in window)) {
+                        window.location.href = 'https://phantom.app/download';
+                    }
+                }, 1500);
+            } else {
+                // For desktop, open in new tab if Phantom is installed
+                if ("solana" in window) {
+                    window.open(swapUrl, '_blank');
+                } else {
+                    window.open('https://phantom.app/download', '_blank');
+                }
+            }
+        }
+
+        // Connect wallet functionality
         document.getElementById('connectButton').addEventListener('click', async () => {
             try {
-                // First check if Phantom is available
                 if ("solana" in window) {
                     const provider = window.solana;
                     if (provider.isPhantom) {
-                        // Connect to the wallet
                         const response = await provider.connect();
                         const publicKey = response.publicKey.toString();
                         console.log("Connected! Public key:", publicKey);
-                        // Update button text
-                        document.getElementById('connectButton').textContent = `Connected: ${publicKey.slice(0, 4)}...${publicKey.slice(-4)}`;
+                        document.getElementById('connectButton').textContent = 
+                            `Connected: ${publicKey.slice(0, 4)}...${publicKey.slice(-4)}`;
                     } else {
                         alert("Please install Phantom wallet");
                     }
@@ -53,6 +97,11 @@
                 console.error(error);
                 alert("Error connecting to wallet");
             }
+        });
+
+        // Buy token functionality
+        document.getElementById('buyButton').addEventListener('click', () => {
+            openPhantomSwap();
         });
     </script>
 </body>
