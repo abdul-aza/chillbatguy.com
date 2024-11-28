@@ -3,222 +3,196 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solana Web App</title>
-    
-    <!-- Include Tailwind CSS for styling -->
+    <title>ChillBat Token Swap</title>
+    <!-- Load core dependencies -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/solana-web3.js/1.89.1/index.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.js"></script>
-    
-    <!-- Include Solana Web3 library -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/solana-web3.js/1.87.6/index.min.js"></script>
-
-    <style>
-        .log-container {
-            max-height: 200px;
-            overflow-y: auto;
-        }
-        
-        .success { color: #10B981; }
-        .error { color: #EF4444; }
-        .info { color: #3B82F6; }
-    </style>
+    <!-- Load Jupiter SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@jup-ag/core@4.0.0-beta.19/dist/index.umd.js"></script>
 </head>
-<body class="bg-gray-100 min-h-screen">
-    <div class="container mx-auto px-4 py-8">
-        <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
-            <!-- Header -->
-            <div class="text-center mb-8">
-                <h1 class="text-3xl font-bold text-gray-800 mb-2">Solana Web App</h1>
-                <p class="text-gray-600">Connect your Phantom wallet to get started</p>
-            </div>
+<body>
+    <div id="root"></div>
 
-            <!-- Wallet Connection Section -->
-            <div class="flex flex-col items-center gap-4 mb-8">
-                <div id="wallet-status" class="text-center mb-4">
-                    <!-- Wallet status will be displayed here -->
-                </div>
-                <button id="connect-button" 
-                        class="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors">
-                    Connect Phantom Wallet
-                </button>
-                <button id="disconnect-button" 
-                        class="hidden bg-red-500 text-white px-6 py-2 rounded-lg hover:bg-red-600 transition-colors">
-                    Disconnect Wallet
-                </button>
-            </div>
+    <script type="text/babel">
+        function App() {
+            const [walletKey, setWalletKey] = React.useState(null);
+            const [loading, setLoading] = React.useState(false);
+            const [status, setStatus] = React.useState('');
+            const [jupiter, setJupiter] = React.useState(null);
 
-            <!-- Transaction Section -->
-            <div id="transaction-section" class="hidden mb-8">
-                <div class="text-center">
-                    <button id="transaction-button" 
-                            class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                        Send Test Transaction
-                    </button>
-                </div>
-            </div>
+            // Define our token constants
+            const CHILLBAT_ADDRESS = 'HwS3GFzAE8BFpL5jTu6Sm5DyMofaGRjpNrzq9yMS6yXE';
+            const SOL_ADDRESS = 'So11111111111111111111111111111111111111112';
+            const CHILLBAT_AMOUNT = 5000;
 
-            <!-- Activity Log -->
-            <div class="border rounded-lg p-4">
-                <h2 class="text-xl font-semibold mb-4">Activity Log</h2>
-                <div id="log-container" class="log-container space-y-2">
-                    <!-- Logs will be displayed here -->
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // Main application logic
-        class SolanaApp {
-            constructor() {
-                this.provider = null;
-                this.publicKey = null;
-                this.connection = null;
-                
-                // Initialize UI elements
-                this.connectButton = document.getElementById('connect-button');
-                this.disconnectButton = document.getElementById('disconnect-button');
-                this.transactionButton = document.getElementById('transaction-button');
-                this.walletStatus = document.getElementById('wallet-status');
-                this.transactionSection = document.getElementById('transaction-section');
-                this.logContainer = document.getElementById('log-container');
-
-                // Bind event handlers
-                this.connectButton.addEventListener('click', () => this.connectWallet());
-                this.disconnectButton.addEventListener('click', () => this.disconnectWallet());
-                this.transactionButton.addEventListener('click', () => this.sendTestTransaction());
-
-                // Initialize the app
-                this.initialize();
-            }
-
-            async initialize() {
-                // Check if Phantom is installed
-                if ('phantom' in window) {
-                    this.provider = window.phantom?.solana;
-                    
-                    if (this.provider?.isPhantom) {
-                        this.addLog('info', 'Phantom wallet detected');
-                        this.connection = new solanaWeb3.Connection(
-                            'https://api.mainnet-beta.solana.com'
+            // Initialize Jupiter when the component mounts
+            React.useEffect(() => {
+                const initJupiter = async () => {
+                    try {
+                        const connection = new solanaWeb3.Connection(
+                            'https://api.mainnet-beta.solana.com',
+                            'confirmed'
                         );
+
+                        // Create a new Jupiter instance
+                        const jupiterInstance = await Jupiter.load({
+                            connection,
+                            cluster: 'mainnet-beta',
+                            restrictIntermediateTokens: true,
+                        });
+
+                        setJupiter(jupiterInstance);
+                    } catch (error) {
+                        console.error('Error initializing Jupiter:', error);
+                        setStatus('Error initializing swap functionality');
+                    }
+                };
+
+                initJupiter();
+            }, []);
+
+            const getProvider = () => {
+                if ('solana' in window) {
+                    const provider = window.solana;
+                    if (provider.isPhantom) return provider;
+                }
+                return null;
+            };
+
+            const connectWallet = async () => {
+                setLoading(true);
+                setStatus('Connecting to wallet...');
+                
+                try {
+                    const provider = getProvider();
+                    if (provider) {
+                        const response = await provider.connect();
+                        setWalletKey(response.publicKey.toString());
+                        setStatus('Wallet connected successfully!');
                     } else {
-                        this.addLog('error', 'Phantom wallet not found');
-                    }
-                }
-
-                // Setup wallet change listeners
-                if (this.provider) {
-                    this.provider.on('connect', (publicKey) => {
-                        this.publicKey = publicKey;
-                        this.updateUI(true);
-                        this.addLog('success', `Connected to wallet: ${publicKey.toBase58().slice(0, 10)}...`);
-                    });
-
-                    this.provider.on('disconnect', () => {
-                        this.publicKey = null;
-                        this.updateUI(false);
-                        this.addLog('info', 'Wallet disconnected');
-                    });
-                }
-            }
-
-            async connectWallet() {
-                try {
-                    if (!this.provider) {
+                        setStatus('Phantom wallet not found - please install it first');
                         window.open('https://phantom.app/', '_blank');
-                        return;
                     }
-
-                    await this.provider.connect();
-                } catch (error) {
-                    this.addLog('error', `Connection failed: ${error.message}`);
+                } catch (err) {
+                    console.error('Error connecting wallet:', err);
+                    setStatus('Error connecting wallet: ' + err.message);
                 }
-            }
+                
+                setLoading(false);
+            };
 
-            async disconnectWallet() {
-                try {
-                    await this.provider.disconnect();
-                } catch (error) {
-                    this.addLog('error', `Disconnect failed: ${error.message}`);
-                }
-            }
-
-            async sendTestTransaction() {
-                if (!this.publicKey) {
-                    this.addLog('error', 'Please connect your wallet first');
+            const handleBuyChillBat = async () => {
+                if (!jupiter || !walletKey) {
+                    setStatus('Please wait for initialization or connect wallet');
                     return;
                 }
 
+                setStatus('Preparing swap...');
                 try {
-                    this.addLog('info', 'Creating test transaction...');
+                    // Get the user's public key
+                    const userPublicKey = new solanaWeb3.PublicKey(walletKey);
                     
-                    // Create a simple SOL transfer transaction (sending 0 SOL to self)
-                    const transaction = new solanaWeb3.Transaction().add(
-                        solanaWeb3.SystemProgram.transfer({
-                            fromPubkey: this.publicKey,
-                            toPubkey: this.publicKey,
-                            lamports: 0
-                        })
+                    // Calculate the amount of SOL needed for the swap
+                    // We'll query Jupiter for the best route first
+                    const routes = await jupiter.computeRoutes({
+                        inputMint: new solanaWeb3.PublicKey(SOL_ADDRESS),
+                        outputMint: new solanaWeb3.PublicKey(CHILLBAT_ADDRESS),
+                        amount: CHILLBAT_AMOUNT * (10 ** 9), // Adjust for decimals
+                        slippageBps: 100, // 1% slippage
+                    });
+
+                    if (!routes.routesInfos?.length) {
+                        setStatus('No viable swap route found');
+                        return;
+                    }
+
+                    // Get the best route
+                    const bestRoute = routes.routesInfos[0];
+                    setStatus(`Found best swap route. Required SOL: ${bestRoute.inAmount / (10 ** 9)}`);
+
+                    // Execute the swap
+                    const { transactions } = await jupiter.exchange({
+                        routeInfo: bestRoute,
+                        userPublicKey,
+                    });
+
+                    // Send the transaction to the user's wallet for approval
+                    const provider = getProvider();
+                    const connection = new solanaWeb3.Connection(
+                        'https://api.mainnet-beta.solana.com',
+                        'confirmed'
                     );
 
-                    // Get the latest blockhash
-                    const blockhash = await this.connection.getLatestBlockhash();
-                    transaction.recentBlockhash = blockhash.blockhash;
-                    transaction.feePayer = this.publicKey;
-
-                    // Request signature from user
-                    const signed = await this.provider.signTransaction(transaction);
-                    this.addLog('info', 'Transaction signed, sending...');
-
-                    // Send the transaction
-                    const signature = await this.connection.sendRawTransaction(signed.serialize());
-                    this.addLog('info', `Transaction sent: ${signature}`);
-
-                    // Confirm transaction
-                    await this.connection.confirmTransaction(signature);
-                    this.addLog('success', 'Transaction confirmed!');
+                    setStatus('Please approve the transaction in your wallet...');
+                    
+                    // Sign and send the transaction using Phantom
+                    const signature = await provider.signAndSendTransaction(transactions.txn);
+                    
+                    // Wait for confirmation
+                    setStatus('Waiting for transaction confirmation...');
+                    await connection.confirmTransaction(signature.signature);
+                    
+                    setStatus(`Swap successful! Transaction signature: ${signature.signature}`);
 
                 } catch (error) {
-                    this.addLog('error', `Transaction failed: ${error.message}`);
+                    console.error('Swap error:', error);
+                    setStatus(`Error during swap: ${error.message}`);
                 }
-            }
+            };
 
-            updateUI(connected) {
-                this.connectButton.style.display = connected ? 'none' : 'block';
-                this.disconnectButton.style.display = connected ? 'block' : 'none';
-                this.transactionSection.style.display = connected ? 'block' : 'none';
-                
-                if (connected && this.publicKey) {
-                    this.walletStatus.innerHTML = `
-                        <div class="text-green-600 font-medium">
-                            Connected: ${this.publicKey.toBase58().slice(0, 10)}...
-                        </div>
-                    `;
-                } else {
-                    this.walletStatus.innerHTML = `
-                        <div class="text-gray-600">
-                            Not connected
-                        </div>
-                    `;
-                }
-            }
+            return (
+                <div className="min-h-screen bg-gray-100 py-6 flex flex-col justify-center sm:py-12">
+                    <div className="relative py-3 sm:max-w-xl sm:mx-auto">
+                        <div className="relative px-4 py-10 bg-white shadow-lg sm:rounded-3xl sm:p-20">
+                            <div className="max-w-md mx-auto">
+                                <div className="divide-y divide-gray-200">
+                                    <div className="py-8 text-base leading-6 space-y-4 text-gray-700 sm:text-lg sm:leading-7">
+                                        <h1 className="text-3xl font-bold mb-8 text-center text-purple-600">
+                                            ChillBat Token Swap
+                                        </h1>
+                                        
+                                        <div className="space-y-4">
+                                            <button
+                                                onClick={connectWallet}
+                                                disabled={loading || walletKey}
+                                                className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+                                            >
+                                                {loading ? 'Connecting...' : 'Connect Phantom Wallet'}
+                                            </button>
 
-            addLog(type, message) {
-                const logEntry = document.createElement('div');
-                logEntry.className = `${type} text-sm`;
-                logEntry.innerHTML = `
-                    <span class="text-gray-500">${new Date().toLocaleTimeString()}</span>
-                    ${message}
-                `;
-                this.logContainer.appendChild(logEntry);
-                this.logContainer.scrollTop = this.logContainer.scrollHeight;
-            }
+                                            {walletKey && (
+                                                <p className="text-sm text-gray-600 bg-gray-100 p-3 rounded">
+                                                    Connected: {walletKey.slice(0, 4)}...{walletKey.slice(-4)}
+                                                </p>
+                                            )}
+
+                                            <button
+                                                onClick={handleBuyChillBat}
+                                                disabled={!walletKey || !jupiter}
+                                                className="w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                                            >
+                                                Buy {CHILLBAT_AMOUNT} ChillBat
+                                            </button>
+                                        </div>
+                                        
+                                        {status && (
+                                            <div className="mt-4 p-3 rounded bg-gray-100 text-sm">
+                                                {status}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
         }
 
-        // Initialize the app when the page loads
-        window.addEventListener('load', () => {
-            new SolanaApp();
-        });
+        ReactDOM.render(<App />, document.getElementById('root'));
     </script>
 </body>
 </html>
