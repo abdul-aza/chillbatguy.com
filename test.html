@@ -46,17 +46,14 @@
         // Function to wait for Phantom to be injected
         function waitForPhantom() {
             return new Promise((resolve) => {
-                // If Phantom is already available, resolve immediately
                 if ("solana" in window) {
                     resolve(window.solana);
                     return;
                 }
 
-                // If not, wait for it to be injected
                 let attempts = 0;
                 const checkForPhantom = setInterval(() => {
                     attempts += 1;
-                    
                     if ("solana" in window) {
                         clearInterval(checkForPhantom);
                         resolve(window.solana);
@@ -73,13 +70,14 @@
             const phantom = await waitForPhantom();
             
             if (!phantom) {
+                alert("Phantom wallet not detected. Redirecting to download page.");
                 window.open('https://phantom.app/download', '_blank');
                 return;
             }
 
             const swapUrl = `https://phantom.app/ul/swap?` +
-                `outputMint=${TOKEN_ADDRESS}` +
-                `&inputMint=${SOL_ADDRESS}` +
+                `outputMint=${encodeURIComponent(TOKEN_ADDRESS)}` +
+                `&inputMint=${encodeURIComponent(SOL_ADDRESS)}` +
                 `&fixed=out` +
                 `&amount=1000`;
 
