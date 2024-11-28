@@ -22,21 +22,40 @@
             const [jupiter, setJupiter] = React.useState(null);
             const [isMobile, setIsMobile] = React.useState(false);
 
-            // Detect mobile environment on component mount
-            React.useEffect(() => {
-                const checkMobile = () => {
-                    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                };
-                setIsMobile(checkMobile());
-            }, []);
-
+            // Constants for our token interaction
             const CHILLBAT_ADDRESS = 'HwS3GFzAE8BFpL5jTu6Sm5DyMofaGRjpNrzq9yMS6yXE';
             const SOL_ADDRESS = 'So11111111111111111111111111111111111111112';
             const CHILLBAT_AMOUNT = 5000;
 
-            // Initialize Jupiter (same as before)
+            // Check if we're on mobile
             React.useEffect(() => {
-                // ... Jupiter initialization code remains the same ...
+                setIsMobile(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+            }, []);
+
+            // Initialize Jupiter
+            React.useEffect(() => {
+                const initJupiter = async () => {
+                    try {
+                        const connection = new window.solanaWeb3.Connection(
+                            'https://api.mainnet-beta.solana.com',
+                            'confirmed'
+                        );
+
+                        const jupiterInstance = await window.Jupiter.load({
+                            connection,
+                            cluster: 'mainnet-beta',
+                            restrictIntermediateTokens: true,
+                        });
+
+                        setJupiter(jupiterInstance);
+                        setStatus('Swap functionality initialized');
+                    } catch (error) {
+                        console.error('Jupiter initialization error:', error);
+                        setStatus('Error initializing swap functionality. Please refresh the page.');
+                    }
+                };
+
+                initJupiter();
             }, []);
 
             const getProvider = () => {
@@ -53,27 +72,22 @@
                 
                 try {
                     if (isMobile) {
-                        // Create deep link for mobile
                         const dappUrl = window.location.href;
-                        const phantomUrl = `https://phantom.app/ul/browse/${encodeURIComponent(dappUrl)}`;
-                        
-                        // Check if Phantom is already installed
                         const provider = getProvider();
+                        
                         if (provider) {
-                            // If installed, try connecting
                             const response = await provider.connect();
                             setWalletKey(response.publicKey.toString());
                             setStatus('Wallet connected successfully!');
                         } else {
-                            // If not installed, redirect to Phantom app or store
+                            // Redirect to appropriate store based on device
                             if (navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad')) {
-                                window.location.href = `https://itunes.apple.com/app/phantom-solana-wallet/id1598432977`;
+                                window.location.href = 'https://itunes.apple.com/app/phantom-solana-wallet/id1598432977';
                             } else {
-                                window.location.href = `https://play.google.com/store/apps/details?id=app.phantom`;
+                                window.location.href = 'https://play.google.com/store/apps/details?id=app.phantom';
                             }
                         }
                     } else {
-                        // Desktop flow remains the same
                         const provider = getProvider();
                         if (provider) {
                             const response = await provider.connect();
@@ -92,28 +106,67 @@
                 setLoading(false);
             };
 
-            // Handle Phantom mobile wallet redirect
-            React.useEffect(() => {
-                const handleRedirect = async () => {
-                    try {
-                        const provider = getProvider();
-                        if (provider) {
-                            const response = await provider.connect();
-                            setWalletKey(response.publicKey.toString());
-                            setStatus('Wallet connected successfully!');
-                        }
-                    } catch (error) {
-                        console.error('Error handling redirect:', error);
-                    }
-                };
-
-                if (window.location.hash.includes('phantom')) {
-                    handleRedirect();
+            // Here's the handleBuyChillBat function that was missing before
+            const handleBuyChillBat = async () => {
+                if (!jupiter || !walletKey) {
+                    setStatus('Please wait for initialization or connect wallet');
+                    return;
                 }
-            }, []);
 
-            // Rest of the component remains the same...
-            
+                setStatus('Preparing swap...');
+                try {
+                    const provider = getProvider();
+                    if (!provider) {
+                        setStatus('Wallet connection lost. Please reconnect.');
+                        return;
+                    }
+
+                    const userPublicKey = new window.solanaWeb3.PublicKey(walletKey);
+                    
+                    // Compute possible routes for the swap
+                    const routes = await jupiter.computeRoutes({
+                        inputMint: new window.solanaWeb3.PublicKey(SOL_ADDRESS),
+                        outputMint: new window.solanaWeb3.PublicKey(CHILLBAT_ADDRESS),
+                        amount: CHILLBAT_AMOUNT * (10 ** 9), // Adjusting for decimals
+                        slippageBps: 100, // 1% slippage tolerance
+                    });
+
+                    if (!routes.routesInfos?.length) {
+                        setStatus('No viable swap route found');
+                        return;
+                    }
+
+                    // Get the best route for the swap
+                    const bestRoute = routes.routesInfos[0];
+                    setStatus(`Found best swap route. Required SOL: ${bestRoute.inAmount / (10 ** 9)}`);
+
+                    // Execute the swap
+                    const { transactions } = await jupiter.exchange({
+                        routeInfo: bestRoute,
+                        userPublicKey,
+                    });
+
+                    setStatus('Please approve the transaction in your wallet...');
+                    
+                    // Sign and send the transaction
+                    const signature = await provider.signAndSendTransaction(transactions.txn);
+                    
+                    // Wait for confirmation
+                    const connection = new window.solanaWeb3.Connection(
+                        'https://api.mainnet-beta.solana.com',
+                        'confirmed'
+                    );
+                    
+                    setStatus('Waiting for transaction confirmation...');
+                    await connection.confirmTransaction(signature.signature);
+                    
+                    setStatus(`Swap successful! Transaction signature: ${signature.signature}`);
+                } catch (error) {
+                    console.error('Swap error:', error);
+                    setStatus(`Error during swap: ${error.message}`);
+                }
+            };
+
             return (
                 <div className="min-h-screen bg-gray-100 py-6 flex flex-col justify-center sm:py-12">
                     <div className="relative py-3 sm:max-w-xl sm:mx-auto">
