@@ -1,110 +1,142 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Phantom Connect and Buy</title>
-    
-    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import styled from "styled-components";
+import { Connection, PublicKey, Transaction, SystemProgram } from "@solana/web3.js";
+import { getProvider, signAndSendTransaction, pollSignatureStatus } from "./utils"; // Utility functions you already have
 
-    <style>
-        .button-container {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-        
-        .phantom-button {
-            padding: 20px 40px;
-            font-size: 18px;
-            background: purple;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-        }
-        
-        .phantom-button:hover {
-            background: #800080;
-        }
-    </style>
-</head>
-<body>
-    <div class="button-container">
-        <button id="connectButton" class="phantom-button">Connect Phantom Wallet</button>
-        <button id="buyButton" class="phantom-button">Buy $ChillBat</button>
-    </div>
+// =============================================================================
+// Constants
+// =============================================================================
 
-    <script>
-        const TOKEN_ADDRESS = "HwS3GFzAE8BFpL5jTu6Sm5DyMofaGRjpNrzq9yMS6yXE"; // Replace with your token's CAIP-19 address
-        const SOL_ADDRESS = "So11111111111111111111111111111111111111112"; // SOL token CAIP-19 address
+const NETWORK = "https://api.mainnet-beta.solana.com"; // Change to your network
+const TOKEN_MINT_ADDRESS = "YOUR_TOKEN_MINT_ADDRESS"; // Replace with $ChillBatGuy token mint address
+const provider = getProvider(); // Detect Phantom Wallet
+const connection = new Connection(NETWORK);
 
-        // Function to detect mobile environment
-        function isMobileDevice() {
-            return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-        }
+// =============================================================================
+// Styled Components
+// =============================================================================
 
-        // Function to open Phantom's swap interface
-        async function openPhantomSwap() {
-            if (!window.solana || !window.solana.isPhantom) {
-                alert("Phantom Wallet is not detected. Please install Phantom to use this feature.");
-                return;
-            }
+const AppContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: Arial, sans-serif;
+`;
 
-            const swapUrl = `https://phantom.app/ul/v1/swap` +
-                `?buy=${encodeURIComponent(TOKEN_ADDRESS)}` +
-                `&sell=${encodeURIComponent(SOL_ADDRESS)}`;
+// =============================================================================
+// Component
+// =============================================================================
 
-            try {
-                if (isMobileDevice()) {
-                    // For mobile, only allow user interaction to open the URL
-                    const userConfirmed = confirm(
-                        "Tap 'OK' to open Phantom Swap. Ensure the Phantom app is installed."
-                    );
-                    if (userConfirmed) {
-                        window.location.href = `phantom://browse/${encodeURIComponent(swapUrl)}`;
-                    }
-                } else {
-                    // For desktop, open in a new tab
-                    window.open(swapUrl, "_blank");
-                }
-            } catch (error) {
-                console.error("Error opening Phantom swap:", error);
-                alert("Failed to open the Phantom swap interface. Please try again.");
-            }
-        }
+const GameApp = () => {
+  const [logs, setLogs] = useState([]); // For logging actions
+  const [publicKey, setPublicKey] = useState(null);
 
-        // Initialize the connect button
-        async function initializeWallet() {
-            const phantom = window.solana && window.solana.isPhantom ? window.solana : null;
-            
-            document.getElementById('connectButton').addEventListener('click', async () => {
-                try {
-                    if (phantom) {
-                        const response = await phantom.connect();
-                        const publicKey = response.publicKey.toString();
-                        console.log("Connected! Public key:", publicKey);
-                        document.getElementById('connectButton').textContent = 
-                            `Connected: ${publicKey.slice(0, 4)}...${publicKey.slice(-4)}`;
-                    } else {
-                        alert("Phantom Wallet is not detected.");
-                    }
-                } catch (error) {
-                    console.error("Error connecting to wallet:", error);
-                    alert("Failed to connect to Phantom Wallet. Please try again.");
-                }
-            });
-        }
+  const createLog = useCallback((status, method, message) => {
+    setLogs((logs) => [...logs, { status, method, message }]);
+  }, []);
 
-        // Attach the event listener for the Buy button
-        document.getElementById('buyButton').addEventListener('click', openPhantomSwap);
+  // Attempt to connect Phantom Wallet
+  const connectWallet = useCallback(async () => {
+    if (!provider) {
+      createLog("error", "connect", "Phantom Wallet not found.");
+      alert("Please install Phantom Wallet to continue.");
+      return;
+    }
 
-        // Initialize wallet connection on page load
-        initializeWallet();
-    </script>
-</body>
-</html>
+    try {
+      const connectionResult = await provider.connect();
+      setPublicKey(connectionResult.publicKey);
+      createLog("success", "connect", `Connected to account: ${connectionResult.publicKey.toBase58()}`);
+    } catch (error) {
+      createLog("error", "connect", `Failed to connect: ${error.message}`);
+    }
+  }, [createLog]);
+
+  // Disconnect Wallet
+  const disconnectWallet = useCallback(() => {
+    if (!provider) return;
+    provider.disconnect();
+    setPublicKey(null);
+    createLog("info", "disconnect", "Disconnected from wallet.");
+  }, [createLog]);
+
+  // Handle Game Payment
+  const handleGamePayment = useCallback(async (amount) => {
+    if (!provider || !publicKey) {
+      createLog("error", "payment", "Wallet not connected.");
+      alert("Please connect your wallet.");
+      return;
+    }
+
+    try {
+      // Construct transaction for $ChillBatGuy transfer
+      const transaction = new Transaction().add(
+        SystemProgram.transfer({
+          fromPubkey: publicKey,
+          toPubkey: "RECIPIENT_PUBLIC_KEY", // Replace with recipient's public key
+          lamports: amount, // Replace with token transfer logic for SPL tokens
+        })
+      );
+
+      createLog("info", "payment", "Creating and signing transaction...");
+      const signature = await signAndSendTransaction(provider, transaction);
+
+      createLog("info", "payment", `Transaction sent: ${signature}`);
+      pollSignatureStatus(signature, connection, createLog);
+
+      createLog("success", "payment", "Transaction confirmed. Update game logic here.");
+    } catch (error) {
+      createLog("error", "payment", `Transaction failed: ${error.message}`);
+    }
+  }, [provider, publicKey, createLog]);
+
+  useEffect(() => {
+    if (!provider) return;
+
+    // Attempt to connect automatically if user already approved Phantom
+    provider.connect({ onlyIfTrusted: true }).catch(() => {});
+
+    provider.on("connect", (pk) => {
+      setPublicKey(pk);
+      createLog("success", "connect", `Connected to wallet: ${pk.toBase58()}`);
+    });
+
+    provider.on("disconnect", () => {
+      setPublicKey(null);
+      createLog("info", "disconnect", "Wallet disconnected.");
+    });
+
+    return () => {
+      provider.disconnect();
+    };
+  }, [createLog]);
+
+  return (
+    <AppContainer>
+      <h1>Welcome to $ChillBatGuy Game</h1>
+      {!publicKey ? (
+        <button onClick={connectWallet}>Connect Phantom Wallet</button>
+      ) : (
+        <>
+          <p>Connected to: {publicKey.toBase58()}</p>
+          <button onClick={() => handleGamePayment(1000000)}>Play Game for 1 Token</button>
+          <button onClick={disconnectWallet}>Disconnect Wallet</button>
+        </>
+      )}
+      <div>
+        <h3>Logs</h3>
+        <ul>
+          {logs.map((log, index) => (
+            <li key={index} style={{ color: log.status === "error" ? "red" : "green" }}>
+              {log.method}: {log.message}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </AppContainer>
+  );
+};
+
+export default GameApp;
