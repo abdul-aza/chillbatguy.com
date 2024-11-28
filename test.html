@@ -1,142 +1,151 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import styled from "styled-components";
-import { Connection, PublicKey, Transaction, SystemProgram } from "@solana/web3.js";
-import { getProvider, signAndSendTransaction, pollSignatureStatus } from "./utils"; // Utility functions you already have
+import React, { useState, useEffect } from 'react';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { AlertCircle, CheckCircle2, Wallet } from 'lucide-react';
 
-// =============================================================================
-// Constants
-// =============================================================================
-
-const NETWORK = "https://api.mainnet-beta.solana.com"; // Change to your network
-const TOKEN_MINT_ADDRESS = "YOUR_TOKEN_MINT_ADDRESS"; // Replace with $ChillBatGuy token mint address
-const provider = getProvider(); // Detect Phantom Wallet
-const connection = new Connection(NETWORK);
-
-// =============================================================================
-// Styled Components
-// =============================================================================
-
-const AppContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  font-family: Arial, sans-serif;
-`;
-
-// =============================================================================
-// Component
-// =============================================================================
-
-const GameApp = () => {
-  const [logs, setLogs] = useState([]); // For logging actions
+const SolanaApp = () => {
+  const [connected, setConnected] = useState(false);
   const [publicKey, setPublicKey] = useState(null);
+  const [logs, setLogs] = useState([]);
+  
+  // Function to add a new log entry
+  const addLog = (type, message) => {
+    setLogs(prev => [...prev, { type, message, timestamp: new Date().toLocaleTimeString() }]);
+  };
 
-  const createLog = useCallback((status, method, message) => {
-    setLogs((logs) => [...logs, { status, method, message }]);
-  }, []);
+  // Function to check if Phantom wallet is installed
+  const getProvider = () => {
+    if ('phantom' in window) {
+      const provider = window.phantom?.solana;
+      if (provider?.isPhantom) {
+        return provider;
+      }
+    }
+    return null;
+  };
 
-  // Attempt to connect Phantom Wallet
-  const connectWallet = useCallback(async () => {
-    if (!provider) {
-      createLog("error", "connect", "Phantom Wallet not found.");
-      alert("Please install Phantom Wallet to continue.");
+  // Connect to Phantom wallet
+  const connectWallet = async () => {
+    try {
+      const provider = getProvider();
+      if (!provider) {
+        addLog('error', 'Phantom wallet not found - please install it first');
+        return;
+      }
+
+      const response = await provider.connect();
+      setPublicKey(response.publicKey.toString());
+      setConnected(true);
+      addLog('success', `Connected to wallet: ${response.publicKey.toString().slice(0, 10)}...`);
+    } catch (error) {
+      addLog('error', `Connection failed: ${error.message}`);
+    }
+  };
+
+  // Disconnect from Phantom wallet
+  const disconnectWallet = () => {
+    try {
+      const provider = getProvider();
+      if (provider) {
+        provider.disconnect();
+        setConnected(false);
+        setPublicKey(null);
+        addLog('info', 'Wallet disconnected');
+      }
+    } catch (error) {
+      addLog('error', `Disconnect failed: ${error.message}`);
+    }
+  };
+
+  // Simulate a transaction
+  const simulateTransaction = async () => {
+    if (!connected) {
+      addLog('error', 'Please connect your wallet first');
       return;
     }
-
-    try {
-      const connectionResult = await provider.connect();
-      setPublicKey(connectionResult.publicKey);
-      createLog("success", "connect", `Connected to account: ${connectionResult.publicKey.toBase58()}`);
-    } catch (error) {
-      createLog("error", "connect", `Failed to connect: ${error.message}`);
-    }
-  }, [createLog]);
-
-  // Disconnect Wallet
-  const disconnectWallet = useCallback(() => {
-    if (!provider) return;
-    provider.disconnect();
-    setPublicKey(null);
-    createLog("info", "disconnect", "Disconnected from wallet.");
-  }, [createLog]);
-
-  // Handle Game Payment
-  const handleGamePayment = useCallback(async (amount) => {
-    if (!provider || !publicKey) {
-      createLog("error", "payment", "Wallet not connected.");
-      alert("Please connect your wallet.");
-      return;
-    }
-
-    try {
-      // Construct transaction for $ChillBatGuy transfer
-      const transaction = new Transaction().add(
-        SystemProgram.transfer({
-          fromPubkey: publicKey,
-          toPubkey: "RECIPIENT_PUBLIC_KEY", // Replace with recipient's public key
-          lamports: amount, // Replace with token transfer logic for SPL tokens
-        })
-      );
-
-      createLog("info", "payment", "Creating and signing transaction...");
-      const signature = await signAndSendTransaction(provider, transaction);
-
-      createLog("info", "payment", `Transaction sent: ${signature}`);
-      pollSignatureStatus(signature, connection, createLog);
-
-      createLog("success", "payment", "Transaction confirmed. Update game logic here.");
-    } catch (error) {
-      createLog("error", "payment", `Transaction failed: ${error.message}`);
-    }
-  }, [provider, publicKey, createLog]);
-
-  useEffect(() => {
-    if (!provider) return;
-
-    // Attempt to connect automatically if user already approved Phantom
-    provider.connect({ onlyIfTrusted: true }).catch(() => {});
-
-    provider.on("connect", (pk) => {
-      setPublicKey(pk);
-      createLog("success", "connect", `Connected to wallet: ${pk.toBase58()}`);
-    });
-
-    provider.on("disconnect", () => {
-      setPublicKey(null);
-      createLog("info", "disconnect", "Wallet disconnected.");
-    });
-
-    return () => {
-      provider.disconnect();
-    };
-  }, [createLog]);
+    
+    addLog('info', 'Initiating transaction...');
+    // Simulate transaction delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    addLog('success', 'Transaction completed successfully!');
+  };
 
   return (
-    <AppContainer>
-      <h1>Welcome to $ChillBatGuy Game</h1>
-      {!publicKey ? (
-        <button onClick={connectWallet}>Connect Phantom Wallet</button>
-      ) : (
-        <>
-          <p>Connected to: {publicKey.toBase58()}</p>
-          <button onClick={() => handleGamePayment(1000000)}>Play Game for 1 Token</button>
-          <button onClick={disconnectWallet}>Disconnect Wallet</button>
-        </>
-      )}
-      <div>
-        <h3>Logs</h3>
-        <ul>
-          {logs.map((log, index) => (
-            <li key={index} style={{ color: log.status === "error" ? "red" : "green" }}>
-              {log.method}: {log.message}
-            </li>
-          ))}
-        </ul>
-      </div>
-    </AppContainer>
+    <div className="min-h-screen bg-gray-100 p-4">
+      <Card className="max-w-2xl mx-auto">
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold flex items-center gap-2">
+            <Wallet className="w-6 h-6" />
+            Solana Web App
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-6">
+            {/* Wallet Connection Section */}
+            <div className="flex flex-col gap-4">
+              {!connected ? (
+                <Button 
+                  onClick={connectWallet}
+                  className="bg-purple-600 hover:bg-purple-700 text-white"
+                >
+                  Connect Phantom Wallet
+                </Button>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-green-600">
+                    <CheckCircle2 className="w-5 h-5" />
+                    <span className="font-medium">
+                      Connected: {publicKey?.slice(0, 10)}...
+                    </span>
+                  </div>
+                  <div className="flex gap-4">
+                    <Button 
+                      onClick={simulateTransaction}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      Simulate Transaction
+                    </Button>
+                    <Button 
+                      onClick={disconnectWallet}
+                      variant="outline"
+                      className="border-red-600 text-red-600 hover:bg-red-50"
+                    >
+                      Disconnect
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Activity Log Section */}
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold mb-2">Activity Log</h3>
+              <div className="bg-gray-50 rounded-lg p-4 max-h-60 overflow-y-auto space-y-2">
+                {logs.map((log, index) => (
+                  <div 
+                    key={index}
+                    className={`flex items-center gap-2 text-sm ${
+                      log.type === 'error' ? 'text-red-600' :
+                      log.type === 'success' ? 'text-green-600' :
+                      'text-gray-600'
+                    }`}
+                  >
+                    {log.type === 'error' ? (
+                      <AlertCircle className="w-4 h-4" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4" />
+                    )}
+                    <span className="text-gray-500 text-xs">{log.timestamp}</span>
+                    <span>{log.message}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 };
 
-export default GameApp;
+export default SolanaApp;
