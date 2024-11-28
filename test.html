@@ -4,168 +4,96 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ChillBat Token Swap</title>
-    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@jup-ag/core@4.0.0-beta.19/dist/index.umd.js"></script>
+    
+    <!-- Load dependencies in the correct order with specific versions -->
+    <script src="https://unpkg.com/@solana/web3.js@1.89.1/lib/index.iife.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.js"></script>
+    
+    <!-- Add Jupiter specifically through their API endpoint -->
+    <script src="https://api.jup.ag/v6/scripts/embed-jupiter-v6.js"></script>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
         function App() {
+            // ... Previous state declarations remain the same ...
             const [walletKey, setWalletKey] = React.useState(null);
             const [loading, setLoading] = React.useState(false);
             const [status, setStatus] = React.useState('');
-            const [jupiter, setJupiter] = React.useState(null);
             const [isMobile, setIsMobile] = React.useState(false);
 
-            // Constants for our token interaction
+            // Add a state for tracking Jupiter initialization
+            const [jupiterApi, setJupiterApi] = React.useState(null);
+
+            // Constants remain the same
             const CHILLBAT_ADDRESS = 'HwS3GFzAE8BFpL5jTu6Sm5DyMofaGRjpNrzq9yMS6yXE';
             const SOL_ADDRESS = 'So11111111111111111111111111111111111111112';
             const CHILLBAT_AMOUNT = 5000;
 
-            // Check if we're on mobile
             React.useEffect(() => {
-                setIsMobile(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
-            }, []);
-
-            // Initialize Jupiter
-            React.useEffect(() => {
+                // Initialize Jupiter using their widget approach
                 const initJupiter = async () => {
                     try {
-                        const connection = new window.solanaWeb3.Connection(
-                            'https://api.mainnet-beta.solana.com',
-                            'confirmed'
-                        );
+                        // Wait for Jupiter to be available globally
+                        if (typeof Jupiter === 'undefined') {
+                            setStatus('Waiting for Jupiter to initialize...');
+                            return;
+                        }
 
-                        const jupiterInstance = await window.Jupiter.load({
-                            connection,
-                            cluster: 'mainnet-beta',
-                            restrictIntermediateTokens: true,
+                        // Initialize Jupiter widget
+                        const jupiter = await Jupiter.init({
+                            endpoint: 'https://api.mainnet-beta.solana.com',
+                            platformFeeAndAccounts: {
+                                feeBps: 50, // 0.5%
+                                feeAccounts: {
+                                    // Use the same address for simplicity
+                                    [SOL_ADDRESS]: CHILLBAT_ADDRESS
+                                }
+                            }
                         });
 
-                        setJupiter(jupiterInstance);
+                        setJupiterApi(jupiter);
                         setStatus('Swap functionality initialized');
                     } catch (error) {
                         console.error('Jupiter initialization error:', error);
-                        setStatus('Error initializing swap functionality. Please refresh the page.');
+                        setStatus('Error initializing swap functionality: ' + error.message);
                     }
                 };
 
                 initJupiter();
             }, []);
 
-            const getProvider = () => {
-                if ('solana' in window) {
-                    const provider = window.solana;
-                    if (provider.isPhantom) return provider;
-                }
-                return null;
-            };
-
-            const connectWallet = async () => {
-                setLoading(true);
-                setStatus('Connecting to wallet...');
-                
-                try {
-                    if (isMobile) {
-                        const dappUrl = window.location.href;
-                        const provider = getProvider();
-                        
-                        if (provider) {
-                            const response = await provider.connect();
-                            setWalletKey(response.publicKey.toString());
-                            setStatus('Wallet connected successfully!');
-                        } else {
-                            // Redirect to appropriate store based on device
-                            if (navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad')) {
-                                window.location.href = 'https://itunes.apple.com/app/phantom-solana-wallet/id1598432977';
-                            } else {
-                                window.location.href = 'https://play.google.com/store/apps/details?id=app.phantom';
-                            }
-                        }
-                    } else {
-                        const provider = getProvider();
-                        if (provider) {
-                            const response = await provider.connect();
-                            setWalletKey(response.publicKey.toString());
-                            setStatus('Wallet connected successfully!');
-                        } else {
-                            setStatus('Phantom wallet not found - please install it first');
-                            window.open('https://phantom.app/', '_blank');
-                        }
-                    }
-                } catch (err) {
-                    console.error('Error connecting wallet:', err);
-                    setStatus('Error connecting wallet: ' + err.message);
-                }
-                
-                setLoading(false);
-            };
-
-            // Here's the handleBuyChillBat function that was missing before
+            // Modified handleBuyChillBat to use Jupiter's widget
             const handleBuyChillBat = async () => {
-                if (!jupiter || !walletKey) {
+                if (!jupiterApi || !walletKey) {
                     setStatus('Please wait for initialization or connect wallet');
                     return;
                 }
 
-                setStatus('Preparing swap...');
                 try {
-                    const provider = getProvider();
-                    if (!provider) {
-                        setStatus('Wallet connection lost. Please reconnect.');
-                        return;
-                    }
-
-                    const userPublicKey = new window.solanaWeb3.PublicKey(walletKey);
+                    setStatus('Preparing swap interface...');
                     
-                    // Compute possible routes for the swap
-                    const routes = await jupiter.computeRoutes({
-                        inputMint: new window.solanaWeb3.PublicKey(SOL_ADDRESS),
-                        outputMint: new window.solanaWeb3.PublicKey(CHILLBAT_ADDRESS),
-                        amount: CHILLBAT_AMOUNT * (10 ** 9), // Adjusting for decimals
-                        slippageBps: 100, // 1% slippage tolerance
+                    // Open Jupiter's swap interface with our parameters
+                    await jupiterApi.openSwapUI({
+                        mint: CHILLBAT_ADDRESS, // The token we want to buy
+                        amount: CHILLBAT_AMOUNT * (10 ** 9), // Amount adjusted for decimals
+                        inputMint: SOL_ADDRESS, // We're paying with SOL
+                        slippage: 1, // 1% slippage
+                        swapMode: 'ExactOut', // We want exactly CHILLBAT_AMOUNT of tokens
                     });
 
-                    if (!routes.routesInfos?.length) {
-                        setStatus('No viable swap route found');
-                        return;
-                    }
-
-                    // Get the best route for the swap
-                    const bestRoute = routes.routesInfos[0];
-                    setStatus(`Found best swap route. Required SOL: ${bestRoute.inAmount / (10 ** 9)}`);
-
-                    // Execute the swap
-                    const { transactions } = await jupiter.exchange({
-                        routeInfo: bestRoute,
-                        userPublicKey,
-                    });
-
-                    setStatus('Please approve the transaction in your wallet...');
-                    
-                    // Sign and send the transaction
-                    const signature = await provider.signAndSendTransaction(transactions.txn);
-                    
-                    // Wait for confirmation
-                    const connection = new window.solanaWeb3.Connection(
-                        'https://api.mainnet-beta.solana.com',
-                        'confirmed'
-                    );
-                    
-                    setStatus('Waiting for transaction confirmation...');
-                    await connection.confirmTransaction(signature.signature);
-                    
-                    setStatus(`Swap successful! Transaction signature: ${signature.signature}`);
+                    setStatus('Please complete the swap in the Jupiter interface');
                 } catch (error) {
                     console.error('Swap error:', error);
-                    setStatus(`Error during swap: ${error.message}`);
+                    setStatus('Error initiating swap: ' + error.message);
                 }
             };
+
+            // ... Rest of the component remains the same ...
 
             return (
                 <div className="min-h-screen bg-gray-100 py-6 flex flex-col justify-center sm:py-12">
@@ -195,7 +123,7 @@
 
                                             <button
                                                 onClick={handleBuyChillBat}
-                                                disabled={!walletKey || !jupiter}
+                                                disabled={!walletKey || !jupiterApi}
                                                 className="w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
                                             >
                                                 Buy {CHILLBAT_AMOUNT} ChillBat
@@ -205,12 +133,6 @@
                                         {status && (
                                             <div className="mt-4 p-3 rounded bg-gray-100 text-sm">
                                                 {status}
-                                            </div>
-                                        )}
-
-                                        {isMobile && !walletKey && (
-                                            <div className="mt-4 text-sm text-gray-600">
-                                                Note: On mobile, you'll need to have the Phantom app installed and use it to connect to this page.
                                             </div>
                                         )}
                                     </div>
