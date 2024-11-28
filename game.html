@@ -329,23 +329,37 @@
                     }
                 }
             };
-
+            
             const connectWallet = async () => {
-                try {
-                    const provider = window.solana;
-                    const response = await provider.connect();
-                    const walletAddress = response.publicKey.toString();
+    try {
+        // First, check if Solana exists in the window object
+        if (!("solana" in window)) {
+            throw new Error("Please install Phantom Wallet first");
+        }
 
-                    console.log("Connected wallet address:", walletAddress);
+        // Now we can safely get the provider
+        const provider = window.solana;
+        
+        // Check if it's actually Phantom
+        if (!provider.isPhantom) {
+            throw new Error("Please install Phantom Wallet");
+        }
 
-                    const balance = await TokenManager.checkTokenBalance(walletAddress);
-                    console.log("Token balance is:", balance);
+        // Now we can safely try to connect
+        const response = await provider.connect();
+        const walletAddress = response.publicKey.toString();
 
-                    if (balance < 1) {
-                        throw new Error("Insufficient $ChillBatGuy tokens to play.");
-                    }
+        console.log("Connected wallet address:", walletAddress);
 
-                    console.log("Token balance sufficient. Proceeding to game...");
+        // Continue with the rest of the connection logic...
+        const balance = await TokenManager.checkTokenBalance(walletAddress);
+        console.log("Token balance is:", balance);
+
+        if (balance < 1) {
+            throw new Error("Insufficient $ChillBatGuy tokens to play.");
+        }
+
+        console.log("Token balance sufficient. Proceeding to game...");
                     
                     try {
                         setConnecting(true);
