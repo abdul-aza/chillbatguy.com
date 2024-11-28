@@ -4,14 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ChillBat Token Swap</title>
-    <!-- Load core dependencies -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/solana-web3.js/1.89.1/index.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <!-- Load dependencies in the correct order -->
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@jup-ag/core@4.0.0-beta.19/dist/index.umd.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.js"></script>
-    <!-- Load Jupiter SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/@jup-ag/core@4.0.0-beta.19/dist/index.umd.js"></script>
 </head>
 <body>
     <div id="root"></div>
@@ -23,37 +22,40 @@
             const [status, setStatus] = React.useState('');
             const [jupiter, setJupiter] = React.useState(null);
 
-            // Define our token constants
+            // Token constants
             const CHILLBAT_ADDRESS = 'HwS3GFzAE8BFpL5jTu6Sm5DyMofaGRjpNrzq9yMS6yXE';
             const SOL_ADDRESS = 'So11111111111111111111111111111111111111112';
             const CHILLBAT_AMOUNT = 5000;
 
-            // Initialize Jupiter when the component mounts
+            // Initialize Jupiter
             React.useEffect(() => {
                 const initJupiter = async () => {
                     try {
-                        const connection = new solanaWeb3.Connection(
+                        // Using the correct global namespace for Solana
+                        const connection = new window.solanaWeb3.Connection(
                             'https://api.mainnet-beta.solana.com',
                             'confirmed'
                         );
 
-                        // Create a new Jupiter instance
-                        const jupiterInstance = await Jupiter.load({
+                        // Create Jupiter instance
+                        const jupiterInstance = await window.Jupiter.load({
                             connection,
                             cluster: 'mainnet-beta',
                             restrictIntermediateTokens: true,
                         });
 
                         setJupiter(jupiterInstance);
+                        setStatus('Swap functionality initialized successfully');
                     } catch (error) {
-                        console.error('Error initializing Jupiter:', error);
-                        setStatus('Error initializing swap functionality');
+                        console.error('Jupiter initialization error:', error);
+                        setStatus('Error initializing swap functionality. Please refresh the page.');
                     }
                 };
 
                 initJupiter();
             }, []);
 
+            // Get Phantom provider
             const getProvider = () => {
                 if ('solana' in window) {
                     const provider = window.solana;
@@ -62,6 +64,7 @@
                 return null;
             };
 
+            // Connect wallet function
             const connectWallet = async () => {
                 setLoading(true);
                 setStatus('Connecting to wallet...');
@@ -84,6 +87,7 @@
                 setLoading(false);
             };
 
+            // Handle token swap
             const handleBuyChillBat = async () => {
                 if (!jupiter || !walletKey) {
                     setStatus('Please wait for initialization or connect wallet');
@@ -92,16 +96,13 @@
 
                 setStatus('Preparing swap...');
                 try {
-                    // Get the user's public key
-                    const userPublicKey = new solanaWeb3.PublicKey(walletKey);
+                    const userPublicKey = new window.solanaWeb3.PublicKey(walletKey);
                     
-                    // Calculate the amount of SOL needed for the swap
-                    // We'll query Jupiter for the best route first
                     const routes = await jupiter.computeRoutes({
-                        inputMint: new solanaWeb3.PublicKey(SOL_ADDRESS),
-                        outputMint: new solanaWeb3.PublicKey(CHILLBAT_ADDRESS),
-                        amount: CHILLBAT_AMOUNT * (10 ** 9), // Adjust for decimals
-                        slippageBps: 100, // 1% slippage
+                        inputMint: new window.solanaWeb3.PublicKey(SOL_ADDRESS),
+                        outputMint: new window.solanaWeb3.PublicKey(CHILLBAT_ADDRESS),
+                        amount: CHILLBAT_AMOUNT * (10 ** 9),
+                        slippageBps: 100,
                     });
 
                     if (!routes.routesInfos?.length) {
@@ -109,34 +110,27 @@
                         return;
                     }
 
-                    // Get the best route
                     const bestRoute = routes.routesInfos[0];
                     setStatus(`Found best swap route. Required SOL: ${bestRoute.inAmount / (10 ** 9)}`);
 
-                    // Execute the swap
                     const { transactions } = await jupiter.exchange({
                         routeInfo: bestRoute,
                         userPublicKey,
                     });
 
-                    // Send the transaction to the user's wallet for approval
                     const provider = getProvider();
-                    const connection = new solanaWeb3.Connection(
+                    const connection = new window.solanaWeb3.Connection(
                         'https://api.mainnet-beta.solana.com',
                         'confirmed'
                     );
 
                     setStatus('Please approve the transaction in your wallet...');
-                    
-                    // Sign and send the transaction using Phantom
                     const signature = await provider.signAndSendTransaction(transactions.txn);
                     
-                    // Wait for confirmation
                     setStatus('Waiting for transaction confirmation...');
                     await connection.confirmTransaction(signature.signature);
                     
                     setStatus(`Swap successful! Transaction signature: ${signature.signature}`);
-
                 } catch (error) {
                     console.error('Swap error:', error);
                     setStatus(`Error during swap: ${error.message}`);
